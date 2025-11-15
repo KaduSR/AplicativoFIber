@@ -24,7 +24,7 @@ export default function LoginScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { signIn, isLoading } = useAuth();
+  const { signIn, isLoading, user } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,10 +33,10 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (user) {
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated]);
+  }, [user]);
 
   const handleLogin = async () => {
     if (!email || !password) {
