@@ -22,6 +22,7 @@
     "@lucide/lab": "^0.1.2",
     "@privacyresearch/libsignal-protocol-typescript": "0.0.16",
     "@react-native-async-storage/async-storage": "2.1.2",
+    "axios": "^1.7.7",
     "@react-native-clipboard/clipboard": "^1.16.3",
     "@react-native-community/datetimepicker": "^8.3.0",
     "@react-native-community/netinfo": "11.4.1",

@@ -17,6 +17,10 @@ const speedTest = require('speedtest-net')
 // Adiciona a biblioteca do Google
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+// --- IMPORTAÇÕES IXC E JWT ---
+const axios = require("axios");
+const jwt = require("jsonwebtoken");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -25,6 +29,29 @@ const PORT = process.env.PORT || 3000;
 // Certifique-se de adicionar 'GEMINI_API_KEY' no painel do Render.
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
+// --- 3. CONFIGURAÇÃO IXC E JWT ---
+// Variáveis de Ambiente (Adicione estas ao Render)
+const IXC_API_URL = process.env.IXC_API_URL || "https://centralfiber.online/webservice/v1";
+const IXC_ADMIN_TOKEN = process.env.IXC_ADMIN_TOKEN; // O seu "ID:TOKEN" do IXC
+const JWT_SECRET = process.env.JWT_SECRET; // Um segredo forte que VOCÊ cria (ex: "meu-segredo-de-32-bits")
+
+// Cliente de API para falar com o IXC
+const ixcApi = axios.create({
+  baseURL: IXC_API_URL,
+  headers: {
+    "Content-Type": "application/json",
+    // O Token de Admin é o padrão para TODAS as requisições do backend
+    "Authorization": `Basic ${Buffer.from(IXC_ADMIN_TOKEN || "").toString("base64")}`
+  },
+  timeout: 10000,
+});
+
+// Função de Helper (para chamadas 'listar')
+const ixcPostList = async (endpoint, data) => {
+  const config = { headers: { "ixcsoft": "listar" } };
+  const response = await ixcApi.post(endpoint, data, config);
+  return response.data;
+};
 
 // Middleware de segurança
 app.use(helmet());
@@ -63,6 +90,105 @@ app.use("/api/", limiter);
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// --- ROTA DE LOGIN ---
+app.post("/api/auth/login", async (req, res, next) => {
+  const { login, senha } = req.body;
+
+  if (!login || !senha) {
+    return res.status(400).json({ error: "Login e senha são obrigatórios." });
+  }
+
+  try {
+    // --- PASSO 1: PESQUISAR O CLIENTE (A "Alternativa") ---
+    const campoBusca = login.includes("@") 
+      ? "cliente.hotsite_email" 
+      : "cliente.cnpj_cpf";
+
+    const searchBody = {
+      qtype: campoBusca,
+      query: login,
+      oper: "=",
+      page: "1",
+      rp: "1",
+      sortname: "cliente.id",
+      sortorder: "asc",
+    };
+
+    const clienteResponse = await ixcPostList("/cliente", searchBody);
+
+    if (clienteResponse.total === 0 || !clienteResponse.registros[0]) {
+      return res.status(401).json({ error: "Usuário ou senha inválidos (C1)" });
+    }
+
+    const cliente = clienteResponse.registros[0];
+
+    // --- PASSO 2: VALIDAR A SENHA (No Backend!) ---
+    if (cliente.senha !== senha) {
+      return res.status(401).json({ error: "Usuário ou senha inválidos (C2)" });
+    }
+
+    // --- PASSO 3: BUSCAR O CONTRATO (Chamada Adicional) ---
+    const contratoBody = {
+      qtype: "cliente_contrato.id_cliente",
+      query: cliente.id,
+      oper: "=",
+      page: "1",
+      rp: "1",
+      sortname: "cliente_contrato.data_ativacao",
+      sortorder: "desc",
+    };
+
+    const contratoResponse = await ixcPostList("/cliente_contrato", contratoBody);
+    if (contratoResponse.total === 0 || !contratoResponse.registros[0]) {
+      return res.status(404).json({ error: "Cliente validado, mas nenhum contrato encontrado." });
+    }
+    const contrato = contratoResponse.registros[0];
+
+    // --- PASSO 4: CRIAR O NOSSO PRÓPRIO TOKEN (JWT) ---
+    const userData = {
+      id_cliente: cliente.id,
+      id_contrato: contrato.id,
+      nome_cliente: cliente.razao,
+      status_contrato: contrato.status,
+    };
+
+    const token = jwt.sign(userData, JWT_SECRET, { expiresIn: "1d" }); // Token válido por 1 dia
+
+    // --- PASSO 5: ENVIAR O TOKEN E OS DADOS PARA O APP ---
+    res.json({
+      token: token, // O NOSSO token de sessão
+      ...userData // Envia os dados do usuário para o app
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// --- MIDDLEWARE DE VALIDAÇÃO JWT ---
+const authenticateJWT = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ error: "Token não fornecido." });
+  }
+
+  const token = authHeader.split(" ")[1]; // Formato: "Bearer <token>"
+
+  if (!token) {
+    return res.status(401).json({ error: "Token não fornecido." });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    // Adiciona os dados do usuário à requisição para uso nas rotas
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).json({ error: "Token inválido ou expirado." });
+  }
+};
+
 // Inicializa GenieACS Service
 const genieacs = new GenieACSService(
   process.env.GENIEACS_URL || "http://localhost:7557",
@@ -84,6 +210,60 @@ app.get("/health", (req, res) => {
 
 // Rotas da API (Existentes)
 app.use("/api/ont", ontRoutes);
+
+// --- ENDPOINTS PROXY IXC (Protegidos por JWT) ---
+// GET /api/invoices - Busca faturas do cliente autenticado
+app.get("/api/invoices", authenticateJWT, async (req, res, next) => {
+  try {
+    const { id_cliente } = req.user;
+
+    const requestBody = {
+      qtype: "fn_areceber.id_cliente",
+      query: id_cliente,
+      oper: "=",
+      page: "1",
+      rp: "50",
+      sortname: "fn_areceber.data_vencimento",
+      sortorder: "desc",
+    };
+
+    const response = await ixcPostList("/fn_areceber", requestBody);
+
+    if (response.total > 0) {
+      return res.json({ invoices: response.registros });
+    }
+
+    return res.json({ invoices: [] });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/boleto/:id - Busca boleto em base64
+app.get("/api/boleto/:id", authenticateJWT, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const requestBody = {
+      boletos: id,
+      atualiza_boleto: "S",
+      tipo_boleto: "arquivo",
+      base64: "S"
+    };
+
+    const response = await ixcApi.post("/get_boleto", requestBody);
+
+    if (response.data.file) {
+      return res.json({ file: response.data.file });
+    }
+
+    return res.status(404).json({ error: "Boleto não encontrado." });
+
+  } catch (error) {
+    next(error);
+  }
+});
 
 // --- 3. NOVA ROTA DO FIBERBOT (GEMINI) ---
 // Esta é a rota que o seu app irá chamar
@@ -169,6 +349,10 @@ app.listen(PORT, () => {
 ║  FiberBot (Gemini): ${
     process.env.GEMINI_API_KEY ? "Ativo" : "Inativo (Sem Chave)"
   }        ║
+║  Speedtest: Ativo em /api/speedtest                       ║
+║  IXC API URL: ${IXC_API_URL}                    ║
+║  IXC Token: ${IXC_ADMIN_TOKEN ? "Carregado" : "NÃO CONFIGURADO!"}              ║
+║  JWT Secret: ${JWT_SECRET ? "Carregado" : "NÃO CONFIGURADO!"}               ║
 ║                                                            ║
 ║  Ready to manage ONTs! 📡                                  ║
 ║                                                            ║

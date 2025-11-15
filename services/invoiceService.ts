@@ -1,68 +1,54 @@
-import { ixcApi } from './ixcApi';
+// services/invoiceService.ts
+//
+// Simplificado para chamar o backend em vez do IXC diretamente
+// O backend faz o proxy para o IXC usando o token JWT
+//
+
+import { api, ixcApi } from './ixcApi';
+import { API_CONFIG } from '@/constants/config';
 import { IXC_CONFIG } from '@/constants/config';
 import type { 
   IXCInvoice,
-  IXCFatura,
-  IXCFaturaResponse,
-  IXCBoletoRequest,
-  IXCBoletoResponse
+  IXCFatura
 } from '@/types/ixc';
+
+interface BackendInvoicesResponse {
+  invoices: IXCFatura[];
+}
+
+interface BackendBoletoResponse {
+  file: string;
+}
 
 export const invoiceService = {
   /**
-   * Busca as faturas (em aberto e pagas) de um cliente específico.
-   * (Método Alternativo: usa /fn_areceber com id_cliente)
+   * Busca as faturas (em aberto e pagas) do cliente autenticado.
+   * Agora chama o backend que faz o proxy para o IXC.
    */
-  async getInvoices(idCliente: string): Promise<IXCFatura[]> {
+  async getInvoices(idCliente?: string): Promise<IXCFatura[]> {
     try {
-      // Prepara o corpo da requisição
-      const requestBody = {
-        qtype: 'fn_areceber.id_cliente',
-        query: idCliente, // Filtra pelo ID do cliente logado
-        oper: '=',
-        page: '1',
-        rp: '50', // Pega as últimas 50 faturas
-        sortname: 'fn_areceber.data_vencimento',
-        sortorder: 'desc',
-      };
+      // Chama o endpoint do backend (não precisa passar idCliente pois vem do JWT)
+      const response = await api.get<BackendInvoicesResponse>(API_CONFIG.ENDPOINTS.INVOICES);
 
-      // Chama o 'postList' (com header 'ixcsoft: listar')
-      const response = await ixcApi.postList<IXCFaturaResponse>(
-        IXC_CONFIG.ENDPOINTS.FN_ARECEBER,
-        requestBody
-      );
-
-      if (response.total > 0) {
-        return response.registros;
-      }
-      
-      return []; // Retorna lista vazia se não houver faturas
+      return response.invoices || [];
 
     } catch (error) {
       console.error('Erro ao buscar faturas:', error);
+      if (error instanceof Error) {
+        throw new Error(`Não foi possível carregar as faturas: ${error.message}`);
+      }
       throw new Error('Não foi possível carregar as faturas.');
     }
   },
 
   /**
    * Busca um boleto específico em formato Base64.
-   * (Método Alternativo: usa /get_boleto)
+   * Agora chama o backend que faz o proxy para o IXC.
    */
   async getBoletoAsBase64(idBoleto: string): Promise<string> {
     try {
-      // Prepara o corpo da requisição
-      const requestBody: IXCBoletoRequest = {
-        boletos: idBoleto, // O ID da fatura (ex: "223485")
-        atualiza_boleto: 'S',
-        tipo_boleto: 'arquivo',
-        base64: 'S'
-      };
-
-      // Chama o 'post' normal (sem o header 'listar')
-      const response = await ixcApi.post<IXCBoletoResponse>(
-        IXC_CONFIG.ENDPOINTS.GET_BOLETO,
-        requestBody
-      );
+      // Chama o endpoint do backend
+      const response = await api.get<BackendBoletoResponse>(`${API_CONFIG.ENDPOINTS.BOLETO}/${idBoleto}`);
 
       if (response.file) {
         return response.file; // Retorna a string base64 do PDF
@@ -72,6 +58,9 @@ export const invoiceService = {
 
     } catch (error) {
       console.error('Erro ao buscar boleto:', error);
+      if (error instanceof Error) {
+        throw new Error(`Não foi possível carregar o boleto: ${error.message}`);
+      }
       throw new Error('Não foi possível carregar o boleto.');
     }
   },

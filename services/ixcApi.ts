@@ -1,119 +1,74 @@
-import { IXC_CONFIG } from '@/constants/config';
-import type { IXCAPIError } from '@/types/ixc';
+// services/ixcApi.ts
+// (Substitua o ficheiro inteiro por este)
 
-class IXCApiClient {
-  private baseUrl: string;
-  private adminToken: string; // Token de admin codificado em Base64
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import { API_CONFIG } from '@/constants/config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Chave para guardar o nosso Token JWT no telemóvel
+const TOKEN_STORAGE_KEY = '@FiberApp:authToken';
+
+class ApiClient {
+  private api: AxiosInstance;
 
   constructor() {
-    this.baseUrl = IXC_CONFIG.BASE_URL;
-    // Codifica o token de admin em Base64
-    this.adminToken = `Basic ${btoa(IXC_CONFIG.TOKEN)}`;
-  }
+    this.api = axios.create({
+      baseURL: API_CONFIG.BASE_URL, // Usa a URL do nosso backend
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000,
+    });
 
-  getAuthHeader(): Record<string, string> {
-    // Sempre retorna o token de admin
-    return {
-      'Authorization': this.adminToken,
-    };
-  }
-
-  async post<T>(endpoint: string, data: Record<string, unknown> = {}): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...this.getAuthHeader(),
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw this.handleError(response.status, errorData);
+    // Esta parte (Interceptor) é crucial.
+    // Ela adiciona o Token JWT (que o *nosso* backend gerou)
+    // em TODAS as requisições futuras (faturas, contratos, etc.)
+    this.api.interceptors.request.use(async (config) => {
+      const token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+      if (token) {
+        // Envia o "Bearer Token" que o backend entende
+        config.headers.Authorization = `Bearer ${token}`;
       }
-
-      return await response.json();
-    } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('Erro desconhecido ao comunicar com o servidor');
-    }
+      return config;
+    }, (error) => {
+      return Promise.reject(error);
+    });
   }
 
-  // Método para pesquisas/listagens que requerem o header 'ixcsoft: listar'
-  async postList<T>(endpoint: string, data: Record<string, unknown> = {}): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'ixcsoft': 'listar', // Header especial para pesquisas
-          ...this.getAuthHeader(),
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw this.handleError(response.status, errorData);
-      }
-
-      return await response.json();
-    } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('Erro desconhecido ao comunicar com o servidor');
-    }
+  /**
+   * Função para salvar o Token JWT (recebido do /api/auth/login)
+   */
+  public async setToken(token: string): Promise<void> {
+    await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
   }
 
-  private handleError(status: number, errorData: unknown): Error {
-    const apiError = errorData as IXCAPIError;
-    
-    switch (status) {
-      case 401:
-        return new Error('Sessão expirada. Por favor, faça login novamente.');
-      case 403:
-        return new Error('Acesso negado. Verifique suas permissões.');
-      case 404:
-        return new Error('Serviço não encontrado.');
-      case 500:
-        return new Error(apiError.message || 'Erro no servidor. Tente novamente mais tarde.');
-      default:
-        return new Error(apiError.message || `Erro ${status}: Não foi possível completar a operação.`);
-    }
+  /**
+   * Função para limpar o Token JWT no logout
+   */
+  public async clearToken(): Promise<void> {
+    await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
   }
 
-  async withRetry<T>(
-    operation: () => Promise<T>,
-    attempts: number = 3
-  ): Promise<T> {
-    let lastError: Error | null = null;
-
-    for (let i = 0; i < attempts; i++) {
-      try {
-        return await operation();
-      } catch (error) {
-        lastError = error as Error;
-        if (i < attempts - 1) {
-          await this.delay(1000 * (i + 1)); // Delay de 1s, 2s, 3s...
-        }
-      }
-    }
-
-    throw lastError || new Error('Operação falhou após múltiplas tentativas');
+  // Métodos de requisição (não precisamos mais do 'postList')
+  public async get<T = any>(endpoint: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.api.get(endpoint, config);
+    return response.data;
   }
 
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  public async post<T = any>(endpoint: string, data: any, config?: AxiosRequestConfig): Promise<T> {
+    const response = await this.api.post(endpoint, data, config);
+    return response.data;
   }
+  
+  // (Pode adicionar PUT, DELETE, etc. se necessário)
 }
 
-export const ixcApi = new IXCApiClient();
+/**
+ * ATENÇÃO: Renomeámos 'ixcApi' para 'api'.
+ * Isto é o nosso novo cliente de API unificado que fala
+ * APENAS com o nosso backend.
+ */
+export const api = new ApiClient();
+
+// Mantém compatibilidade com código existente
+export const ixcApi = api;

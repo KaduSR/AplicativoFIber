@@ -1,10 +1,13 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authService } from '@/services/authService';
+import { api } from '@/services/ixcApi';
 import type { AuthUserData } from '@/types/ixc';
 
+type AuthUserDataWithToken = AuthUserData & { token: string };
+
 interface AuthContextType {
-  user: AuthUserData | null;
+  user: AuthUserDataWithToken | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -17,7 +20,7 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 const AUTH_STORAGE_KEY = '@fibernet:auth';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUserData | null>(null);
+  const [user, setUser] = useState<AuthUserDataWithToken | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -28,9 +31,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const stored = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
       if (stored) {
-        const userData: AuthUserData = JSON.parse(stored);
+        const userData: AuthUserDataWithToken = JSON.parse(stored);
         setUser(userData);
-        // Não há mais token de sessão para restaurar
+        // Restaura o token JWT no api para uso em requisições
+        if (userData.token) {
+          await api.setToken(userData.token);
+        }
       }
     } catch (error) {
       console.error('Error loading stored auth:', error);
@@ -41,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      // Usa o authService.login() com a nova implementação
+      // Usa o authService.login() que agora chama o backend
       const response = await authService.login({ login: email, senha: password });
       
       setUser(response);
@@ -53,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      authService.logout();
+      await authService.logout();
       setUser(null);
       await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
     } catch (error) {

@@ -1,58 +1,52 @@
-/*
-Este é o arquivo de configuração principal do seu aplicativo.
-Ele informa ao aplicativo onde encontrar todas as suas APIs (endpoints).
-*/
-
-// --- 1. Integração Principal do IXC ---
-// Estes são os dados para conectar no seu IXCSoft.
+// constants/config.ts
+//
+// 1. Este arquivo foi simplificado.
+// 2. Agora só precisamos de UMA URL base: a do nosso backend no Render.
+// 3. Todas as outras configurações (Tokens do IXC, URLs do GenieACS)
+//    agora vivem APENAS no backend.
 
 /**
- * A URL completa do seu IXCSoft.
- * Eu já preenchi com o caminho padrão do webservice.
+ * A URL principal do seu backend (hospedado no Render).
+ * 🛑 IMPORTANTE: Substitua pela sua URL pública do Render.
  */
-export const IXC_CONFIG = {
-  BASE_URL: "https://centralfiber.online/webservice/v1",
-  TOKEN: "21:40112b3d6db245dbf0ac40379896f26c1c7efc100ed0a47fa45739e85c5971c1",
+const API_BASE_URL = "https://api.centralfiber.online"; // <-- COLOQUE A SUA URL DO RENDER AQUI
+
+// Exportamos as rotas que o app vai consumir do *nosso* backend
+export const API_CONFIG = {
+  BASE_URL: API_BASE_URL,
+  
   ENDPOINTS: {
-    CLIENTE: "/cliente",
-    CONTRATO: "/cliente_contrato",
-    FATURAS: "/fn_areacliente_faturas",
-    SUPORTE: "/su_oss_chamado",
-    FN_ARECEBER: "/fn_areceber", // Para listar faturas
-    GET_BOLETO: "/get_boleto", // Para buscar o boleto
-  },
+    // Rotas de Autenticação
+    LOGIN: "/api/auth/login",      // O novo endpoint de login que criámos no backend
+
+    // Rotas do IXC (que o backend agora faz o proxy)
+    INVOICES: "/api/invoices",
+    CONTRACTS: "/api/contracts",
+    BOLETO: "/api/boleto",
+    SUPPORT: "/api/support",
+
+    // Rotas de Serviços
+    ONT: "/api/ont",               // O endpoint do GenieACS
+    BOT: "/api/bot",               // O endpoint do FiberBot/Gemini
+    SPEEDTEST: "/api/speedtest",   // O endpoint do Speedtest
+  }
 };
 
-// --- 2. Endpoints do seu Backend (Ponte de Serviços) ---
-// O seu aplicativo não fala direto com o GenieACS ou Downdetector.
-// Ele fala com o seu próprio backend (o arquivo AplicativoFIber/backend/server.js),
-// e o backend faz essa ponte.
-//
-// Você precisará hospedar esse 'server.js' em algum lugar
-// (ex: https://api.centralfiber.online) e colocar as URLs abaixo.
-const BACKEND_URL = "https://api.centralfiber.online";
+// Manter compatibilidade com código existente (será removido gradualmente)
+export const BACKEND_API_URL = API_BASE_URL;
 
-// Os outros serviços provavelmente esperam objetos similares
 export const GENIE_ACS_CONFIG = {
-  BASE_URL: `${BACKEND_URL}/api/ont`
+  BASE_URL: `${API_BASE_URL}/api/ont`
 };
 
 export const DOWNDETECTOR_CONFIG = {
-  BASE_URL: `${BACKEND_URL}/api/status`
+  BASE_URL: `${API_BASE_URL}/api/status`
 };
 
 export const FIBERBOT_CONFIG = {
-  BASE_URL: `${BACKEND_URL}/api/bot`
+  BASE_URL: `${API_BASE_URL}/api/bot`
 };
 
-// --- 3. Outros Serviços ---
-
-/**
- * URL do seu servidor de Teste de Velocidade.
- * Como você optou por usar a biblioteca 'fast-speedtest-api',
- * esta variável provavelmente NÃO será usada pelo 'services/speedTestService.ts',
- * mas a mantemos aqui para consistência do arquivo.
- */
 export const SPEED_TEST_CONFIG = {
   // Nenhuma configuração de URL necessária
 };
