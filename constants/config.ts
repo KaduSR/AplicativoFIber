@@ -11,18 +11,18 @@ export const API_CONFIG = {
   BASE_URL: API_BASE_URL,
   
   ENDPOINTS: {
-    // Autenticação (Tarefa 05)
+    // Autenticação
     LOGIN: '/api/auth/login',
 
     // Rotas do IXC (Item 2)
-    INVOICES: '/api/invoices',
-    CONTRACTS: '/api/contracts',
-    BOLETO: '/api/boleto', // (Ex: /api/boleto/12345)
+    INVOICES: '/api/invoices',     // <-- ADICIONADO
+    CONTRACTS: '/api/contracts',    // <-- ADICIONADO
+    BOLETO: '/api/boleto',        // (Já existia na Tarefa 02)
     
     // Rotas de Serviços
-    ONT: '/api/ont',           // (Item 7)
-    BOT: '/api/bot',           // (Item 5)
-    SPEEDTEST: '/api/speedtest',   // (Item 7)
-    NEWS: '/api/news',           // (Item 4)
+    ONT: '/api/ont',              // (Item 7)
+    BOT: '/api/bot',              // (Item 5)
+    SPEEDTEST: '/api/speedtest',
+    NEWS: '/api/news',            // <-- ADICIONADO (Item 4)
   }
 };
