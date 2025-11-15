@@ -1,89 +1,87 @@
+// Em: contexts/AuthContext.tsx
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 import { authService } from '@/services/authService';
-import { api } from '@/services/ixcApi';
-import type { AuthUserData } from '@/types/ixc';
+import type { IXCLoginRequest, AuthUserData } from '@/types/ixc';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-type AuthUserDataWithToken = AuthUserData & { token: string };
-
-interface AuthContextType {
-  user: AuthUserDataWithToken | null;
+// (O tipo do contexto muda para guardar AuthUserData)
+interface AuthContextData {
   isLoading: boolean;
-  isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+  user: AuthUserData | null;
+  signIn: (credentials: IXCLoginRequest) => Promise<void>;
+  signOut: () => void;
 }
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const USER_STORAGE_KEY = '@FiberApp:user';
 
-const AUTH_STORAGE_KEY = '@fibernet:auth';
+export const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUserDataWithToken | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<AuthUserData | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // Começa true
 
+  // Efeito para carregar o utilizador salvo ao iniciar o app
   useEffect(() => {
-    loadStoredAuth();
+    async function loadStorageData() {
+      try {
+        const storedUser = await AsyncStorage.getItem(USER_STORAGE_KEY);
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+      } catch (e) {
+        console.error("Falha ao carregar dados do utilizador", e);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadStorageData();
   }, []);
 
-  const loadStoredAuth = async () => {
+
+  const signIn = async (credentials: IXCLoginRequest) => {
+    setIsLoading(true);
     try {
-      const stored = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
-      if (stored) {
-        const userData: AuthUserDataWithToken = JSON.parse(stored);
-        setUser(userData);
-        // Restaura o token JWT no api para uso em requisições
-        if (userData.token) {
-          await api.setToken(userData.token);
-        }
-      }
+      // 1. Tenta o login REAL (Tarefa 08)
+      console.log("Tentando login real...");
+      // O 'authService.login' agora chama o nosso backend
+      const userData = await authService.login(credentials); 
+      
+      // 2. Se funcionar, define o utilizador e salva no storage
+      setUser(userData);
+      await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
+
     } catch (error) {
-      console.error('Error loading stored auth:', error);
+      // 3. Se falhar, mostra o erro real (Tarefa 12)
+      console.error("Falha no login real:", error);
+      const errorMessage = (error instanceof Error) ? error.message : "Ocorreu um erro desconhecido.";
+      Alert.alert("Erro no Login", errorMessage);
+      
+      // Limpa qualquer dado antigo
+      setUser(null);
+      await AsyncStorage.removeItem(USER_STORAGE_KEY);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const signOut = async () => {
     try {
-      // Usa o authService.login() que agora chama o backend
-      const response = await authService.login({ login: email, senha: password });
-      
-      setUser(response);
-      await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(response));
+      // 1. Chama o authService para limpar o Token JWT (Tarefa 09)
+      await authService.logout(); 
     } catch (error) {
-      throw error;
-    }
-  };
-
-  const logout = async () => {
-    try {
-      await authService.logout();
+      console.error("Erro ao limpar o token no logout:", error);
+    } finally {
+      // 2. ATUALIZA O ESTADO (O PASSO MAIS IMPORTANTE)
       setUser(null);
-      await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
-    } catch (error) {
-      console.error('Error during logout:', error);
+      // 3. Limpa os dados do utilizador do storage
+      await AsyncStorage.removeItem(USER_STORAGE_KEY);
     }
-  };
-
-  const refreshUser = async () => {
-    // Implement user data refresh if needed
-    // This could fetch updated contract status, etc.
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isAuthenticated: !!user,
-        login,
-        logout,
-        refreshUser,
-      }}
-    >
+    <AuthContext.Provider value={{ isLoading, user, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
-}
+};

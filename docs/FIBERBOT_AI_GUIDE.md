@@ -84,31 +84,6 @@ OPENAI_API_KEY=sk-proj-...
 
 ---
 
-### Opção 2: OnSpace AI (Gratuito)
-
-**Vantagens:**
-- ✅ Gratuito para desenvolvedores
-- ✅ Integração nativa OnSpace
-- ✅ Sem limites de uso
-
-**Desvantagens:**
-- ❌ Pode ser menos preciso que OpenAI
-
-**Setup:**
-
-1. Criar conta OnSpace: https://onspace.ai
-
-2. Obter API Key: Dashboard → Settings → API Keys
-
-3. Configurar:
-```env
-# .env
-EXPO_PUBLIC_AI_PROVIDER=onspace
-EXPO_PUBLIC_ONSPACE_API_KEY=sua_chave_onspace
-```
-
----
-
 ### Opção 3: Modo Básico (Sem IA)
 
 **Vantagens:**

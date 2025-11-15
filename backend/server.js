@@ -17,9 +17,12 @@ const speedTest = require("speedtest-net");
 // Adiciona a biblioteca do Google
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// --- IMPORTAÇÕES IXC E JWT ---
-const axios = require("axios");
-const jwt = require("jsonwebtoken");
+    // --- ADICIONE ESTAS LINHAS ---
+    const axios = require('axios');
+    const jwt = require('jsonwebtoken');
+    const base64 = require('react-native-base64');
+    const cheerio = require('cheerio'); // Para o DownDetector
+    // --- FIM DAS ADIÇÕES ---
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,12 +33,11 @@ app.set("trust proxy", 1);
 // Certifique-se de adicionar 'GEMINI_API_KEY' no painel do Render.
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
-// --- 3. CONFIGURAÇÃO IXC E JWT ---
-// Variáveis de Ambiente (Adicione estas ao Render)
-const IXC_API_URL =
-  process.env.IXC_API_URL || "https://centralfiber.online/webservice/v1";
-const IXC_ADMIN_TOKEN = process.env.IXC_ADMIN_TOKEN; // O seu "ID:TOKEN" do IXC
-const JWT_SECRET = process.env.JWT_SECRET; // Um segredo forte que VOCÊ cria (ex: "meu-segredo-de-32-bits")
+// (Adicione IXC_API_URL, IXC_ADMIN_TOKEN, JWT_SECRET, NEWS_API_KEY)
+    const IXC_API_URL = process.env.IXC_API_URL || 'https://centralfiber.online/webservice/v1';
+    const IXC_ADMIN_TOKEN = process.env.IXC_ADMIN_TOKEN; 
+    const JWT_SECRET = process.env.JWT_SECRET;
+    const NEWS_API_KEY = process.env.NEWS_API_KEY; // <-- ADICIONE (Obtenha em gnews.io)
 
 // Cliente de API para falar com o IXC
 const ixcApi = axios.create({
@@ -271,61 +273,161 @@ app.get("/api/boleto/:id", authenticateJWT, async (req, res, next) => {
   }
 });
 
-// --- 3. NOVA ROTA DO FIBERBOT (GEMINI) ---
-// Esta é a rota que o seu app irá chamar
-app.post("/api/bot", async (req, res, next) => {
-  try {
-    const { message, history } = req.body;
+// --- SUBSTITUA A ROTA /api/bot ---
+    app.post('/api/bot', async (req, res, next) => {
+      try {
+        const { message, history, id_cliente } = req.body;
+        if (!process.env.GEMINI_API_KEY) throw new Error('Chave Gemini não configurada.');
 
-    if (!process.env.GEMINI_API_KEY) {
-      throw new Error("Chave da API do Gemini não configurada no servidor.");
-    }
+        // --- LÓGICA DO DOWNDETECTOR ---
+        let downDetectorInfo = "";
+        // Verifica se a mensagem menciona um serviço (ex: Discord, Netflix, etc.)
+        const servicos = ['discord', 'netflix', 'youtube', 'iptv', 'instagram', 'facebook', 'whatsapp'];
+        const servicoMencionado = servicos.find(s => message.toLowerCase().includes(s));
 
-    // Pega o prompt do sistema do seu guia
-    const systemPrompt = `
-      Você é o FiberBot, assistente da FiberNet.
-      PERSONALIDADE:
-      - Sempre questionador e curioso
-      - Aprende hábitos do cliente
-      - Proativo em diagnosticar problemas
-      REGRAS DE DIAGNÓSTICO:
-      1. IPTV/Streaming travando:
-         - SEMPRE pergunte qual serviço específico
-         - Verifique o sinal óptico
-         - Se sinal bom (> -25 dBm), pode ser problema do serviço
-         - Sugira verificar no DownDetector
-      2. Internet lenta:
-         - Pergunte qual dispositivo
-         - Sugira teste de velocidade
+        if (servicoMencionado) {
+          console.log(`[Bot] Verificando DownDetector para: ${servicoMencionado}`);
+          try {
+            // Alternativa: Raspagem do site (Scraping)
+            const { data } = await axios.get(`https://downdetector.com.br/fora-do-ar/${servicoMencionado}/`);
+            const $ = cheerio.load(data);
+            const status = $('.entry-title').first().text().trim();
+            if (status) {
+              downDetectorInfo = `Informação do DownDetector para ${servicoMencionado}: ${status}.`;
+            }
+          } catch (scrapeError) {
+            console.error("[Bot] Falha ao raspar DownDetector:", scrapeError.message);
+            downDetectorInfo = `Não consegui verificar o status do ${servicoMencionado} no DownDetector.`;
+          }
+        }
+        // --- FIM DA LÓGICA DOWNDETECTOR ---
+
+        // (Simulação de contexto do cliente - substitua por chamadas reais ao IXC/Genie)
+        const userContext = {
+          nome: "Carlos",
+          plano: "Fiber Game 500MB",
+          sinal_optico: "-19.2 dBm" 
+        };
+
+        const systemPrompt = `
+    [Persona]
+    Aja como o 'FiberBot', um assistente técnico especialista da FiberNet.
+
+    [Contexto do Cliente]
+    - Nome: ${userContext.nome}
+    - Plano: ${userContext.plano}
+    - Sinal Óptico (ONT): ${userContext.sinal_optico}
+
+    [Contexto Externo]
+    - ${downDetectorInfo || "Nenhuma informação externa solicitada."}
+
+    [Tarefa]
+    Diagnostique o problema do cliente com base no contexto.
+
+    [Instruções]
+    - A regra mais importante: O sinal óptico ideal é acima de -25 dBm. O sinal do cliente é ${userContext.sinal_optico}.
+    - Se o sinal óptico estiver bom (ex: -19 dBm), o problema NÃO é o sinal físico.
+    - Se o sinal estiver bom E o DownDetector reportar problemas (como o 'downDetectorInfo' mostra), informe ao cliente que o problema é externo.
+    - Se a mensagem for sobre IPTV/Streaming (Netflix, YouTube, Discord) E o sinal óptico estiver bom, SEMPRE use o contexto do DownDetector.
     `;
 
-    // Inicializa o modelo Gemini
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // (O resto da chamada ao Gemini continua igual)
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const chatHistory = history.map(msg => ({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.content }],
+        }));
+        const chat = model.startChat({ history: chatHistory, systemInstruction: systemPrompt });
+        const result = await chat.sendMessage(message);
+        const text = result.response.text();
+        res.json({ reply: text });
 
-    // Constrói o histórico para o Gemini
-    const chatHistory = history.map((msg) => ({
-      role: msg.role === "user" ? "user" : "model", // Garante os papéis corretos
-      parts: [{ text: msg.content }],
-    }));
+      } catch (error) {
+        next(error);
+      }
+    });
+    // --- FIM DA SUBSTITUIÇÃO ---
 
-    // Inicia o chat com o histórico e o prompt do sistema
-    const chat = model.startChat({
-      history: chatHistory,
-      systemInstruction: systemPrompt,
+// --- ROTA DE NOTÍCIAS (ITEM 4) ---
+    app.get('/api/news', async (req, res, next) => {
+      if (!NEWS_API_KEY) {
+        return next(new Error("API de Notícias não configurada no servidor."));
+      }
+      try {
+        // Tópicos: IPTV, Jogos, Tecnologia, Fibra Óptica, Séries e Filmes
+        const query = "IPTV OR gaming OR technology OR 'fibra óptica' OR series OR movies";
+        const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=pt&apikey=${NEWS_API_KEY}`;
+        
+        const { data } = await axios.get(url);
+        res.json(data.articles || []);
+      
+      } catch (error) {
+        console.error("Erro ao buscar notícias:", error.message);
+        next(error);
+      }
     });
 
-    // Envia a nova mensagem do usuário para o Gemini
-    const result = await chat.sendMessage(message);
-    const response = result.response;
-    const text = response.text();
+    // --- ROTAS PROTEGIDAS (Precisam de JWT) ---
+    // Middleware para verificar o nosso Token JWT
+    const checkAuth = (req, res, next) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Token não fornecido.' });
+      }
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded; // Adiciona os dados do user (id_cliente, etc.) ao 'req'
+        next();
+      } catch (error) {
+        return res.status(401).json({ error: 'Token inválido.' });
+      }
+    };
 
-    // Devolve a resposta do Gemini para o aplicativo
-    res.json({ reply: text });
-  } catch (error) {
-    // Passa o erro para o handler de erro global
-    next(error);
-  }
-});
+    // --- ROTA DE FATURAS (ITEM 2) ---
+    app.get('/api/invoices', checkAuth, async (req, res, next) => {
+      try {
+        const requestBody = {
+          qtype: 'fn_areceber.id_cliente',
+          query: req.user.id_cliente, // Pega o ID do cliente (do JWT)
+          oper: '=',
+          page: '1', rp: '50',
+          sortname: 'fn_areceber.data_vencimento', sortorder: 'desc',
+        };
+        const data = await ixcPostList('/fn_areceber', requestBody);
+        res.json(data.registros || []);
+      } catch (error) { next(error); }
+    });
+
+    // --- ROTA DE CONTRATOS (ITEM 2) ---
+    app.get('/api/contracts', checkAuth, async (req, res, next) => {
+      try {
+        const requestBody = {
+          qtype: 'cliente_contrato.id_cliente',
+          query: req.user.id_cliente, // Pega o ID do cliente (do JWT)
+          oper: '=',
+          page: '1', rp: '10',
+          sortname: 'cliente_contrato.id', sortorder: 'desc',
+        };
+        const data = await ixcPostList('/cliente_contrato', requestBody);
+        res.json(data.registros || []);
+      } catch (error) { next(error); }
+    });
+
+    // --- ROTA DE BOLETO (ITEM 2) ---
+    app.get('/api/boleto/:id', checkAuth, async (req, res, next) => {
+       try {
+        const requestBody = {
+          boletos: req.params.id, // Pega o ID da fatura (da URL)
+          atualiza_boleto: 'S',
+          tipo_boleto: 'arquivo',
+          base64: 'S'
+        };
+        // '/get_boleto' não é 'listar', então usamos o 'ixcApi.post' normal
+        const data = await ixcApi.post('/get_boleto', requestBody);
+        res.json(data); // Retorna o JSON com o { file: "base64..." }
+      } catch (error) { next(error); }
+    });
 
 // 404 handler (Sempre por último, antes do Error handler)
 app.use((req, res) => {

@@ -1,32 +1,29 @@
 // Em: services/authService.ts
-//
-// 1. APAGUE todo o conteúdo antigo.
-// 2. COLE este novo código.
-//
-// Este ficheiro foi simplificado. Ele agora usa o 'api.ts' 
-// (que fala com o nosso backend) em vez do 'ixcApi.ts'.
-
-import { api } from './ixcApi'; // (Mantive o nome 'ixcApi' para não quebrar outros imports)
+import { api } from './ixcApi'; // <--- Importa o NOVO 'api.ts'
 import { API_CONFIG } from '@/constants/config';
 import type { AuthUserData, IXCLoginRequest } from '@/types/ixc';
+import axios from 'axios';
 
 export const authService = {
   
   /**
    * Função de login real.
-   * Agora chama o *nosso backend* no Render, que faz o trabalho sujo no IXC.
+   * Chama o *nosso backend* no Render.
    */
   async login(credentials: IXCLoginRequest): Promise<AuthUserData> {
     try {
+      // O tipo de resposta esperado do nosso backend (server.js)
+      type BackendAuthResponse = AuthUserData & { token: string };
+
       // 1. Chama o NOVO endpoint de login do *nosso backend*
-      const response = await api.post<AuthUserData & { token: string }>(
+      const response = await api.post<BackendAuthResponse>(
         API_CONFIG.ENDPOINTS.LOGIN, // Chama '/api/auth/login'
         credentials
       );
 
       // 2. O backend (server.js) retorna o nosso Token JWT e os dados do user
       if (response.token) {
-        // 3. Salvamos o Token JWT no AsyncStorage
+        // 3. Salvamos o Token JWT no AsyncStorage (o 'api.ts' faz isso)
         await api.setToken(response.token);
       }
       
@@ -34,10 +31,12 @@ export const authService = {
       return response;
 
     } catch (error) {
-      if (error instanceof Error) {
-        throw new Error(`Erro no login: ${error.message}`);
+      console.error('Erro no authService.login:', error);
+      // Re-lança o erro para o AuthContext (Tarefa 12) poder mostrá-lo
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(error.response.data.error || 'Erro de rede');
       }
-      throw new Error('Erro desconhecido ao fazer login');
+      throw error;
     }
   },
 
@@ -46,30 +45,5 @@ export const authService = {
    */
   async logout() {
     await api.clearToken();
-  },
-
-  /**
-   * Mantemos o mockLogin para testes offline.
-   * (Esta é a função que está a ser chamada agora)
-   */
-  async mockLogin(email: string, senha: string): Promise<AuthUserData> {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    if (email === 'test@fibernet.com' && senha === '123456') {
-      const mockResponse: AuthUserData = {
-        id_cliente: '123',
-        id_contrato: '12345',
-        nome_cliente: 'João Silva (Mock)',
-        email: 'test@fibernet.com',
-        telefone: '(11) 99999-9999',
-        status_contrato: 'Ativo',
-      };
-      
-      // Simula o salvamento de um token falso
-      await api.setToken('mock-jwt-token');
-      return mockResponse;
-    }
-
-    throw new Error('E-mail ou senha inválidos');
   },
 };

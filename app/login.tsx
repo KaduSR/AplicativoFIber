@@ -24,7 +24,7 @@ export default function LoginScreen() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { login, isAuthenticated } = useAuth();
+  const { signIn, isLoading } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -48,7 +48,7 @@ export default function LoginScreen() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+    await signIn({ login: email, senha: password });
       router.replace('/(tabs)');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao fazer login');
