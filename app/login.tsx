@@ -29,7 +29,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -45,7 +45,7 @@ export default function LoginScreen() {
     }
 
     setError('');
-    setIsLoading(true);
+    setIsSubmitting(true);
 
     try {
     await signIn({ login: email, senha: password });
@@ -53,7 +53,7 @@ export default function LoginScreen() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao fazer login');
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -113,7 +113,7 @@ export default function LoginScreen() {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
-              editable={!isLoading}
+              editable={!isSubmitting}
             />
           </View>
 
@@ -134,7 +134,7 @@ export default function LoginScreen() {
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
-              editable={!isLoading}
+              editable={!isSubmitting}
             />
             <TouchableOpacity 
               style={styles.eyeIcon}
@@ -156,9 +156,9 @@ export default function LoginScreen() {
           ) : null}
 
           <TouchableOpacity
-            style={[styles.loginButton, { opacity: isLoading ? 0.7 : 1 }]}
+            style={[styles.loginButton, { opacity: isSubmitting ? 0.7 : 1 }]}
             onPress={handleLogin}
-            disabled={isLoading}
+            disabled={isSubmitting}
           >
             <LinearGradient
               colors={theme.colors.gradient.primary}
@@ -166,7 +166,7 @@ export default function LoginScreen() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              {isLoading ? (
+              {isSubmitting ? (
                 <ActivityIndicator color={theme.colors.text.inverse} />
               ) : (
                 <>
