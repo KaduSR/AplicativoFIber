@@ -1,6 +1,4 @@
-/*
- * backend/services/ixc.js
- */
+/* backend/services/ixc.js */
 const axios = require("axios");
 const { Buffer } = require("node:buffer");
 
@@ -9,7 +7,6 @@ class IXCService {
     this.apiUrl =
       process.env.IXC_API_URL || "https://centralfiber.online/webservice/v1";
     this.adminToken = process.env.IXC_ADMIN_TOKEN;
-
     const tokenBase64 = this.adminToken
       ? Buffer.from(this.adminToken).toString("base64")
       : "";
@@ -31,34 +28,20 @@ class IXCService {
       });
       return response.data;
     } catch (error) {
-      console.error(`[IXC Service] Erro ao listar ${endpoint}:`, error.message);
+      console.error(`[IXC] Erro listar ${endpoint}:`, error.message);
       return { total: 0, registros: [] };
     }
   }
 
-  async post(endpoint, data) {
-    try {
-      const response = await this.api.post(endpoint, data);
-      return response.data;
-    } catch (error) {
-      console.error(
-        `[IXC Service] Erro ao postar em ${endpoint}:`,
-        error.message
-      );
-      throw error;
-    }
-  }
-
+  // --- BUSCA CLIENTE ---
   async findClienteByLogin(login) {
     const apenasNumeros = login.replace(/\D/g, "");
     const isCpf = /^\d{11}$|^\d{14}$/.test(apenasNumeros);
 
-    let campoBusca = isCpf ? "cliente.cnpj_cpf" : "cliente.hotsite_email";
-    let valorBusca = isCpf ? apenasNumeros : login;
-
-    const payload = {
-      qtype: campoBusca,
-      query: valorBusca,
+    // 1. Tenta busca exata (CPF limpo ou Email)
+    let payload = {
+      qtype: isCpf ? "cliente.cnpj_cpf" : "cliente.hotsite_email",
+      query: isCpf ? apenasNumeros : login,
       oper: "=",
       page: "1",
       rp: "1",
@@ -68,6 +51,7 @@ class IXCService {
 
     let resultado = await this.list("/cliente", payload);
 
+    // 2. Se falhar e for CPF, tenta formatado (xxx.xxx.xxx-xx)
     if (isCpf && resultado.total === 0) {
       const cpfFormatado = apenasNumeros.replace(
         /(\d{3})(\d{3})(\d{3})(\d{2})/,
@@ -81,7 +65,7 @@ class IXCService {
     return resultado.total > 0 ? resultado.registros[0] : null;
   }
 
-  // --- ESTA É A FUNÇÃO QUE ESTAVA FALTANDO ---
+  // --- BUSCA CONTRATO (A Função que faltava) ---
   async findContratoByClienteId(clienteId) {
     const payload = {
       qtype: "cliente_contrato.id_cliente",
@@ -92,13 +76,11 @@ class IXCService {
       sortname: "cliente_contrato.data_ativacao",
       sortorder: "desc",
     };
-
     const resultado = await this.list("/cliente_contrato", payload);
-    // Retorna o contrato ou null
     return resultado.total > 0 ? resultado.registros[0] : null;
   }
-  // -------------------------------------------
 
+  // --- OUTROS ---
   async getFaturas(clienteId) {
     const payload = {
       qtype: "fn_areceber.id_cliente",
@@ -109,19 +91,19 @@ class IXCService {
       sortname: "fn_areceber.data_vencimento",
       sortorder: "desc",
     };
-
     const resultado = await this.list("/fn_areceber", payload);
     return resultado.registros || [];
   }
 
   async getBoleto(boletoId) {
-    const payload = {
-      boletos: boletoId,
-      atualiza_boleto: "S",
-      tipo_boleto: "arquivo",
-      base64: "S",
-    };
-    return this.post("/get_boleto", payload);
+    return this.api
+      .post("/get_boleto", {
+        boletos: boletoId,
+        atualiza_boleto: "S",
+        tipo_boleto: "arquivo",
+        base64: "S",
+      })
+      .then((r) => r.data);
   }
 }
 
