@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   CUSTOMER = 'CUSTOMER',
@@ -5,10 +6,11 @@ export enum UserRole {
 
 export interface User {
   id: number;
-  name: string;
+  nome_cliente: string; // Atualizado conforme solicitado
   email: string;
   contractId?: number;
-  planName?: string;
+  status_contrato?: string; // Atualizado conforme solicitado
+  planName?: string; // Mantido para compatibilidade visual
 }
 
 export interface AuthResponse {

@@ -11,6 +11,9 @@ export default {
     extend: {
       colors: {
         zinc: { 850: '#1f1f22', 900: '#18181b', 950: '#09090b' }
+      },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
       }
     },
   },

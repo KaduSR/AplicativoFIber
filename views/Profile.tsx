@@ -36,10 +36,10 @@ export const Profile: React.FC = () => {
             <User />
          </div>
          <div>
-            <h2 className="text-xl font-bold text-zinc-800">{user?.name}</h2>
+            <h2 className="text-xl font-bold text-zinc-800">{user?.nome_cliente}</h2>
             <p className="text-sm text-zinc-500">{user?.email}</p>
             <span className="inline-block mt-1 px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded-md border border-green-200">
-               {user?.planName || 'Plano Ativo'}
+               {user?.planName || user?.status_contrato || 'Plano Ativo'}
             </span>
          </div>
       </div>

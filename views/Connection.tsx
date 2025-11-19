@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../services/api';
-import { Wifi, RefreshCw, Smartphone, Tv, Gamepad, Laptop, Tablet, Ban, RotateCcw, Activity } from 'lucide-react';
+import { Wifi, RefreshCw, Upload, Download, Zap, Activity } from 'lucide-react';
 
 export const Connection: React.FC = () => {
-  const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [results, setResults] = useState<any>(null);
   const [ontData, setOntData] = useState<any>({ status: '...', signal: '...' });
   
   useEffect(() => {
@@ -11,114 +12,111 @@ export const Connection: React.FC = () => {
   }, []);
 
   const runTest = async () => {
-    if (loading) return;
-    setLoading(true);
-    setTimeout(() => setLoading(false), 3000);
+    if (testing) return;
+    setTesting(true);
+    setResults(null);
+    
+    try {
+      const data = await dataService.runSpeedTest();
+      // Simula delay visual se a API for muito rápida (opcional)
+      setResults(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTesting(false);
+    }
   };
 
-  const devices = [
-      { name: 'iPhone 13 Pro', ip: '192.168.100.100', type: 'mobile', signal: '92%', icon: Smartphone },
-      { name: 'Samsung Smart TV', ip: '192.168.100.101', type: 'tv', signal: 'Ethernet', icon: Tv },
-      { name: 'PlayStation 5', ip: '192.168.100.102', type: 'game', signal: 'Ethernet', icon: Gamepad },
-      { name: 'Notebook Dell', ip: '192.168.100.103', type: 'laptop', signal: '78%', icon: Laptop },
-      { name: 'Galaxy Tab S8', ip: '192.168.100.105', type: 'tablet', signal: '56%', icon: Tablet },
-  ];
-
   return (
-    <div className="p-6 space-y-8 text-white pb-24 animate-fade-in bg-black min-h-screen">
+    <div className="p-6 space-y-6 pb-24 animate-fade-in min-h-screen bg-zinc-950 text-white">
         
-        <div className="pt-4">
-           <h1 className="text-2xl font-bold">Gerenciamento de Rede</h1>
-           <p className="text-zinc-400 text-sm">Controle total da sua conexão FiberNET</p>
+        <div className="flex items-center space-x-3 mb-4">
+           <div className="p-3 bg-[#0066FF]/10 rounded-xl text-[#0066FF]">
+             <Wifi size={24} />
+           </div>
+           <div>
+             <h1 className="text-xl font-bold">Diagnóstico</h1>
+             <p className="text-zinc-400 text-xs">Análise técnica da conexão</p>
+           </div>
         </div>
 
-        {/* ONT Status Card - Black/Dark Grey */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 relative overflow-hidden shadow-lg">
-            <div className="flex items-start justify-between mb-6">
-                <div className="flex items-center space-x-3">
-                    <div className="bg-blue-500/10 p-2.5 rounded-xl border border-blue-500/20">
-                        <Activity className="text-[#0066FF]" size={24} />
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-lg leading-tight">Status da ONT Huawei</h3>
-                        <p className="text-zinc-500 text-xs">Huawei HG8245H5</p>
-                    </div>
-                </div>
-                <div className="flex flex-col items-end">
-                   <button className="text-[#0066FF] hover:text-blue-400 transition-colors flex flex-col items-center">
-                      <RotateCcw size={20} />
-                      <span className="text-[10px] mt-1">Reboot</span>
-                   </button>
-                </div>
+        {/* ONT Detail Card */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-4">
+                <span className="text-zinc-400 text-sm">Equipamento</span>
+                <span className="font-bold text-white">Huawei HG8245H5</span>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+               <div>
+                   <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Status</p>
+                   <p className={`font-bold ${ontData.status === 'Online' ? 'text-emerald-400' : 'text-red-400'}`}>
+                     {ontData.status}
+                   </p>
+               </div>
+               <div className="text-right">
+                   <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Potência (Sinal)</p>
+                   <p className={`font-mono font-bold ${parseFloat(ontData.signal) < -27 ? 'text-red-400' : 'text-emerald-400'}`}>
+                     {ontData.signal} dBm
+                   </p>
+               </div>
+            </div>
+        </div>
+
+        {/* Speedtest Area */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 flex flex-col items-center justify-center text-center relative overflow-hidden">
             
-            <div className="grid grid-cols-2 gap-y-4 gap-x-8 px-2">
-                <div>
-                    <p className="text-zinc-500 text-xs mb-1">Tempo Ativo</p>
-                    <p className="font-bold text-white text-sm">14d 6h</p>
+            {testing ? (
+                <div className="py-10">
+                    <div className="w-24 h-24 border-4 border-zinc-800 border-t-[#0066FF] rounded-full animate-spin mb-6 mx-auto"></div>
+                    <p className="text-zinc-300 font-bold animate-pulse">Testando sua velocidade...</p>
+                    <p className="text-zinc-500 text-xs mt-2">Isso pode levar alguns segundos</p>
                 </div>
-                <div className="text-right">
-                    <p className="text-zinc-500 text-xs mb-1">Sinal RX</p>
-                    <p className={`font-mono font-bold text-sm ${parseFloat(ontData.signal) < -25 ? 'text-red-500' : 'text-green-500'}`}>
-                        {ontData.signal} dBM
-                    </p>
-                </div>
-                <div>
-                    <p className="text-zinc-500 text-xs mb-1">Temperatura</p>
-                    <p className="font-bold text-white text-sm">42°C</p>
-                </div>
-            </div>
-        </div>
-
-        {/* Speedtest Button Area */}
-        <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-3xl p-5">
-             <div className="flex items-center space-x-2 mb-4">
-                 <Activity size={18} className="text-[#0066FF]" />
-                 <h3 className="font-bold text-white">Teste de Velocidade Ookla</h3>
-             </div>
-             
-             <button 
-                onClick={runTest}
-                className="w-full bg-[#0066FF] hover:bg-blue-600 text-white font-bold py-3.5 rounded-full shadow-lg shadow-blue-900/30 transition-all active:scale-95 flex items-center justify-center"
-                disabled={loading}
-            >
-                {loading ? <RefreshCw className="animate-spin mr-2" size={20} /> : <RefreshCw className="mr-2" size={20} />}
-                {loading ? 'Executando Teste...' : 'Executar Novo Teste'}
-            </button>
-        </div>
-
-        {/* Devices List */}
-        <div>
-            <div className="flex items-center justify-between mb-4 px-1">
-                <h3 className="text-xl font-bold">Dispositivos Conectados({devices.length})</h3>
-                <Activity size={18} className="text-[#0066FF] animate-pulse" />
-            </div>
-            
-            <div className="space-y-3">
-                {devices.map((dev, i) => (
-                    <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                            <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800">
-                                <dev.icon className="text-[#0066FF]" size={24} />
-                            </div>
-                            <div>
-                                <p className="font-bold text-white text-sm">{dev.name}</p>
-                                <p className="text-xs text-zinc-500 font-mono mb-1">{dev.ip}</p>
-                                {dev.signal === 'Ethernet' ? (
-                                    <span className="text-[10px] text-zinc-400 flex items-center">Ethernet</span>
-                                ) : (
-                                    <span className="text-[10px] text-green-500 flex items-center">
-                                        <Wifi size={10} className="mr-1"/> Sinal {dev.signal}
-                                    </span>
-                                )}
-                            </div>
+            ) : results ? (
+                <div className="w-full animate-fade-in">
+                    <div className="mb-8">
+                        <span className="text-zinc-500 text-xs uppercase tracking-widest">Resultado do Teste</span>
+                        <h2 className="text-5xl font-black text-white mt-2">{results.download} <span className="text-xl font-medium text-zinc-500">Mbps</span></h2>
+                        <div className="inline-flex items-center bg-emerald-500/10 text-emerald-500 px-3 py-1 rounded-full text-xs font-bold mt-2">
+                           <Zap size={12} className="mr-1" /> Internet Excelente
                         </div>
-                        <button className="w-8 h-8 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-500 hover:text-red-500 hover:border-red-500 transition-colors">
-                            <Ban size={16} />
-                        </button>
                     </div>
-                ))}
-            </div>
+
+                    <div className="grid grid-cols-3 gap-2 w-full">
+                        <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800">
+                            <Download size={20} className="text-blue-500 mb-2 mx-auto" />
+                            <p className="text-[10px] text-zinc-500 uppercase">Download</p>
+                            <p className="font-bold text-white">{results.download}</p>
+                        </div>
+                        <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800">
+                            <Upload size={20} className="text-purple-500 mb-2 mx-auto" />
+                            <p className="text-[10px] text-zinc-500 uppercase">Upload</p>
+                            <p className="font-bold text-white">{results.upload}</p>
+                        </div>
+                        <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800">
+                            <Activity size={20} className="text-orange-500 mb-2 mx-auto" />
+                            <p className="text-[10px] text-zinc-500 uppercase">Ping</p>
+                            <p className="font-bold text-white">{results.ping}ms</p>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="py-8">
+                    <div className="w-20 h-20 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-4 text-zinc-600">
+                        <Wifi size={32} />
+                    </div>
+                    <p className="text-zinc-400 text-sm max-w-[200px] mx-auto">Execute um teste para verificar a qualidade da sua conexão.</p>
+                </div>
+            )}
+
+            {!testing && (
+                <button 
+                    onClick={runTest}
+                    className="mt-8 w-full bg-[#0066FF] hover:bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-900/20 transition-all active:scale-95 flex items-center justify-center"
+                >
+                    <RefreshCw className="mr-2" size={20} />
+                    {results ? 'Testar Novamente' : 'INICIAR TESTE'}
+                </button>
+            )}
         </div>
     </div>
   );

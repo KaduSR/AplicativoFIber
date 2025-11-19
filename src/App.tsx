@@ -1,12 +1,14 @@
+
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
 import { Dashboard } from './views/Dashboard'; 
 import { Login } from './views/Login';
 import { Connection } from './views/Connection';
 import { Support } from './views/Support';
 import { News } from './views/News';
-import { Invoices } from './views/Invoices'; // Nova importação
+import { Invoices } from './views/Invoices'; 
 import { Home, Wifi, MessageSquare, Newspaper, FileText } from 'lucide-react';
 
 // Componente para rotas protegidas
@@ -71,20 +73,22 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const App = () => {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          
-          {/* Rotas Protegidas com Layout */}
-          <Route path="/" element={<PrivateRoute><MainLayout><Dashboard /></MainLayout></PrivateRoute>} />
-          <Route path="/conexao" element={<PrivateRoute><MainLayout><Connection /></MainLayout></PrivateRoute>} />
-          <Route path="/suporte" element={<PrivateRoute><MainLayout><Support /></MainLayout></PrivateRoute>} />
-          <Route path="/noticias" element={<PrivateRoute><MainLayout><News /></MainLayout></PrivateRoute>} />
-          <Route path="/faturas" element={<PrivateRoute><MainLayout><Invoices /></MainLayout></PrivateRoute>} />
-          
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
+      <NotificationProvider>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            
+            {/* Rotas Protegidas com Layout */}
+            <Route path="/" element={<PrivateRoute><MainLayout><Dashboard /></MainLayout></PrivateRoute>} />
+            <Route path="/conexao" element={<PrivateRoute><MainLayout><Connection /></MainLayout></PrivateRoute>} />
+            <Route path="/suporte" element={<PrivateRoute><MainLayout><Support /></MainLayout></PrivateRoute>} />
+            <Route path="/noticias" element={<PrivateRoute><MainLayout><News /></MainLayout></PrivateRoute>} />
+            <Route path="/faturas" element={<PrivateRoute><MainLayout><Invoices /></MainLayout></PrivateRoute>} />
+            
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AuthProvider>
+      </NotificationProvider>
     </BrowserRouter>
   );
 };

@@ -7,5 +7,6 @@ body {
   color: white;
   font-family: system-ui, -apple-system, sans-serif;
 }
+
 /* Esconde barra de rolagem para parecer app */
 ::-webkit-scrollbar { width: 0px; background: transparent; }

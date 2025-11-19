@@ -23,12 +23,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const checkAuth = () => {
       try {
+        const token = localStorage.getItem('@FiberApp:jwt');
         const storedUser = localStorage.getItem(USER_KEY);
-        if (storedUser) {
+        
+        if (token && storedUser) {
           setUser(JSON.parse(storedUser));
+        } else {
+          // Se não tem token, limpa tudo
+          localStorage.removeItem('@FiberApp:jwt');
+          localStorage.removeItem(USER_KEY);
+          setUser(null);
         }
       } catch (e) {
         console.error("Erro ao restaurar sessão", e);
+        signOut();
       } finally {
         setIsLoading(false);
       }
@@ -40,11 +48,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
       const data: AuthResponse = await authService.loginCpf(cpf);
-      setUser(data.user);
-      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      
+      // Garantir que o objeto user tenha as propriedades esperadas
+      // Caso a API retorne 'name' em vez de 'nome_cliente', fazemos um fallback
+      const mappedUser: User = {
+        ...data.user,
+        nome_cliente: data.user.nome_cliente || (data.user as any).name || 'Cliente',
+        status_contrato: data.user.status_contrato || 'Ativo'
+      };
+
+      setUser(mappedUser);
+      localStorage.setItem(USER_KEY, JSON.stringify(mappedUser));
       navigate('/'); // Redireciona para Dashboard
     } catch (error: any) {
-      throw error;
+      console.error("Login Failed", error);
+      throw error; // Repassa o erro para a tela de Login tratar
     } finally {
       setIsLoading(false);
     }

@@ -1,11 +1,14 @@
+
 import React, { useEffect, useState } from 'react';
-import { Zap, Activity, MessageSquare, FileText, LogOut, Wifi } from 'lucide-react';
+import { Zap, Activity, MessageSquare, FileText, LogOut, Wifi, Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useNotification } from '../context/NotificationContext';
 import { dataService } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 
 export const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth();
+  const { permission, requestPermission, sendNotification } = useNotification();
   const navigate = useNavigate();
   const [ontStatus, setOntStatus] = useState<any>(null);
   const [loadingOnt, setLoadingOnt] = useState(true);
@@ -15,6 +18,11 @@ export const Dashboard: React.FC = () => {
        try {
          const data = await dataService.getOntStatus();
          setOntStatus(data);
+         
+         // Simulação de Notificação se a conexão estiver Offline
+         if (data.status === 'Offline' && permission === 'granted') {
+            sendNotification('Alerta de Conexão', 'Sua fibra óptica parece estar offline. Toque para ver detalhes.', '/conexao');
+         }
        } catch (e) {
          setOntStatus({ status: 'Offline', signal: 'S/ Sinal' });
        } finally {
@@ -22,7 +30,16 @@ export const Dashboard: React.FC = () => {
        }
     };
     loadData();
-  }, []);
+  }, [permission]); // Re-run if permission changes
+
+  // Simulação: Notificar sobre fatura ao carregar o dashboard (apenas demonstração)
+  const handleBellClick = async () => {
+    if (permission !== 'granted') {
+        await requestPermission();
+    } else {
+        sendNotification('Fatura Disponível', 'Sua fatura de Julho já está disponível para pagamento.', '/faturas');
+    }
+  };
 
   const isOnline = ontStatus?.status === 'Online';
 
@@ -34,9 +51,24 @@ export const Dashboard: React.FC = () => {
              <h1 className="text-2xl font-bold tracking-tight">Olá, {user?.nome_cliente?.split(' ')[0] || 'Cliente'}</h1>
              <p className="text-zinc-400 text-xs font-medium mt-0.5">Plano: <span className="text-[#0066FF]">{user?.planName || 'Fibra 500MB'}</span></p>
           </div>
-          <button onClick={signOut} className="p-2 bg-zinc-900 border border-zinc-800 rounded-full hover:bg-red-900/20 hover:border-red-900/50 transition-colors group">
-            <LogOut size={20} className="text-zinc-400 group-hover:text-red-500" />
-          </button>
+          
+          <div className="flex items-center space-x-2">
+            {/* Botão de Notificação */}
+            <button 
+                onClick={handleBellClick}
+                className="p-2 bg-zinc-900 border border-zinc-800 rounded-full hover:bg-zinc-800 relative transition-colors"
+            >
+                <Bell size={20} className={permission === 'granted' ? "text-[#0066FF]" : "text-zinc-400"} />
+                {permission !== 'granted' && (
+                    <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
+                )}
+            </button>
+
+            {/* Botão Sair */}
+            <button onClick={signOut} className="p-2 bg-zinc-900 border border-zinc-800 rounded-full hover:bg-red-900/20 hover:border-red-900/50 transition-colors group">
+                <LogOut size={20} className="text-zinc-400 group-hover:text-red-500" />
+            </button>
+          </div>
        </div>
 
        <div className="p-6 space-y-8">
