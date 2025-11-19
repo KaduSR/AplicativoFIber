@@ -30,17 +30,20 @@ export const News: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4 pb-4 animate-fade-in">
-      <div className="flex items-center space-x-2 mb-6">
-        <div className="bg-green-500/10 p-2 rounded-full">
+    <div className="space-y-6 p-6 pb-24 animate-fade-in">
+      <div className="flex items-center space-x-3 mb-2">
+        <div className="bg-green-500/10 p-2.5 rounded-xl border border-green-500/20">
           <Newspaper className="text-green-500 w-6 h-6" />
         </div>
-        <h2 className="text-xl font-bold text-white">Notícias & Tecnologia</h2>
+        <div>
+            <h2 className="text-xl font-bold text-white leading-none">Notícias</h2>
+            <p className="text-zinc-500 text-xs mt-1">Atualizações e comunicados</p>
+        </div>
       </div>
 
       <div className="space-y-4">
         {news.map((item, index) => {
-          // Lógica para determinar se a notícia é crítica para o status da conexão
+          // Lógica de Relevância: Primeiro item + Palavras-chave críticas
           const isUrgent = index === 0 && (
             item.title.toLowerCase().includes('manutenção') ||
             item.title.toLowerCase().includes('aviso') ||
@@ -52,52 +55,56 @@ export const News: React.FC = () => {
           return (
             <div 
               key={index} 
-              className={`group bg-zinc-900/80 backdrop-blur-sm border rounded-2xl overflow-hidden transition-all duration-300 flex flex-col ${
-                isUrgent ? 'border-red-900/50 shadow-lg shadow-red-900/20' : 'border-zinc-800 hover:border-zinc-700'
+              className={`group relative bg-zinc-900 border rounded-3xl overflow-hidden transition-all duration-300 flex flex-col shadow-lg ${
+                isUrgent 
+                  ? 'border-red-500/50 shadow-red-900/20 ring-1 ring-red-500/20' 
+                  : 'border-zinc-800 hover:border-zinc-700'
               }`}
             >
-              <div className="h-40 overflow-hidden relative">
+              {/* Imagem e Badges */}
+              <div className="h-48 overflow-hidden relative">
                  <img 
                   src={item.image} 
                   alt={item.title} 
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 opacity-80 group-hover:opacity-100"
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100"
                  />
-                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent"></div>
+                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/20 to-transparent"></div>
                  
-                 {/* Selo de Importante */}
+                 {/* Selo de Importante (Destaque solicitado) */}
                  {isUrgent && (
-                   <div className="absolute top-3 right-3 z-20">
-                     <div className="bg-red-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full flex items-center shadow-lg shadow-red-900/50 animate-pulse border border-red-400/30">
-                       <AlertTriangle size={12} className="mr-1.5" strokeWidth={3} />
+                   <div className="absolute top-3 right-3 z-20 animate-pulse">
+                     <div className="bg-red-600 text-white text-[10px] font-extrabold px-3 py-1.5 rounded-full flex items-center shadow-[0_0_15px_rgba(220,38,38,0.6)] border border-white/10">
+                       <AlertTriangle size={13} className="mr-1.5 fill-white text-red-600" strokeWidth={1.5} />
                        IMPORTANTE
                      </div>
                    </div>
                  )}
 
-                 <div className="absolute bottom-3 left-4">
-                    <span className={`text-xs font-bold px-2 py-1 rounded-md border backdrop-blur-md ${
+                 <div className="absolute bottom-3 left-4 right-4 flex justify-between items-end">
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg backdrop-blur-md border ${
                       isUrgent 
-                        ? 'text-red-200 bg-red-900/40 border-red-500/30'
-                        : 'text-green-400 bg-green-900/30 border-green-500/20'
+                        ? 'text-red-100 bg-red-600/80 border-red-400/30'
+                        : 'text-zinc-300 bg-zinc-950/60 border-zinc-700'
                     }`}>
                       {item.source.name}
                     </span>
+                    
+                    <div className="flex items-center text-[10px] text-zinc-300 bg-black/40 px-2 py-1 rounded-lg backdrop-blur-sm">
+                       <Calendar size={10} className="mr-1.5 text-zinc-400" />
+                       {new Date(item.publishedAt).toLocaleDateString('pt-BR')}
+                    </div>
                  </div>
               </div>
               
+              {/* Conteúdo */}
               <div className="p-5 flex flex-col flex-1">
-                <div className="flex items-center text-xs text-gray-500 mb-2">
-                  <Calendar size={12} className="mr-1" />
-                  {new Date(item.publishedAt).toLocaleDateString('pt-BR')}
-                </div>
-                
-                <h3 className={`text-lg font-bold mb-2 leading-tight transition-colors ${
-                  isUrgent ? 'text-white group-hover:text-red-400' : 'text-white group-hover:text-green-400'
+                <h3 className={`text-lg font-bold mb-2 leading-tight ${
+                  isUrgent ? 'text-white' : 'text-zinc-100'
                 }`}>
                   {item.title}
                 </h3>
                 
-                <p className="text-gray-400 text-sm mb-4 line-clamp-2 flex-1">
+                <p className="text-zinc-400 text-sm mb-5 line-clamp-3 flex-1 leading-relaxed">
                   {item.description}
                 </p>
                 
@@ -105,14 +112,14 @@ export const News: React.FC = () => {
                   href={item.url} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className={`inline-flex items-center justify-center w-full py-2.5 rounded-lg text-sm font-medium transition-all duration-200 border ${
+                  className={`inline-flex items-center justify-center w-full py-3 rounded-xl text-sm font-bold transition-all duration-200 ${
                     isUrgent
-                      ? 'bg-red-900/20 text-red-200 border-red-900/50 hover:bg-red-600 hover:text-white hover:border-red-500'
-                      : 'bg-zinc-800 text-gray-300 border-zinc-700 hover:bg-green-600 hover:text-white hover:border-green-500'
+                      ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/20'
+                      : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700'
                   }`}
                 >
-                  Ler matéria completa
-                  <ExternalLink size={14} className="ml-2" />
+                  Ler comunicado
+                  <ExternalLink size={16} className="ml-2" />
                 </a>
               </div>
             </div>
@@ -121,8 +128,9 @@ export const News: React.FC = () => {
       </div>
       
       {news.length === 0 && (
-        <div className="text-center text-gray-500 py-10">
-            <p>Nenhuma notícia encontrada no momento.</p>
+        <div className="flex flex-col items-center justify-center py-20 text-zinc-500 opacity-50">
+            <Newspaper size={48} strokeWidth={1} className="mb-4" />
+            <p>Nenhuma notícia no momento.</p>
         </div>
       )}
     </div>

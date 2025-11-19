@@ -1,7 +1,8 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Lock, Mail, Eye, EyeOff } from 'lucide-react';
+import { Input } from '../components/Input';
+import { Button } from '../components/Button';
 
 const formatCPF = (value: string) => {
   return value
@@ -16,6 +17,7 @@ export const Login: React.FC = () => {
   const { signInCpf, isLoading } = useAuth();
   const [cpf, setCpf] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false); // Visual only, since we use CPF
 
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCpf(formatCPF(e.target.value));
@@ -34,64 +36,70 @@ export const Login: React.FC = () => {
     try {
       await signInCpf(clean);
     } catch (err: any) {
-      setError('Não foi possível autenticar. Tente novamente.');
+      setError('Não foi possível autenticar. Verifique seus dados.');
     }
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative">
       
-      {/* Efeitos de Fundo */}
-      <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-green-500/20 rounded-full blur-[100px]"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-64 h-64 bg-blue-500/20 rounded-full blur-[100px]"></div>
-
-      <div className="w-full max-w-sm z-10">
+      <div className="w-full max-w-sm z-10 animate-fade-in">
         <div className="text-center mb-12">
-           <h1 className="text-4xl font-black tracking-tighter">
-             FIBER<span className="text-green-500">.NET</span>
+           <h1 className="text-5xl font-black tracking-tighter mb-1 italic">
+             FIBER<span className="text-[#FF6600]">.NET</span>
            </h1>
-           <p className="text-zinc-500 text-xs uppercase tracking-widest mt-2">Área do Assinante</p>
+           <p className="text-zinc-400 text-sm font-light italic font-serif">Central de Conexão Inteligente</p>
         </div>
 
-        <div className="bg-zinc-900/50 backdrop-blur-lg border border-zinc-800 rounded-2xl p-6 shadow-2xl">
-           <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                 <label className="block text-sm text-zinc-400 mb-2 font-bold ml-1">CPF do Titular</label>
-                 <div className="relative">
-                    <input 
-                      type="tel"
-                      value={cpf}
-                      onChange={handleCpfChange}
-                      placeholder="000.000.000-00"
-                      maxLength={14}
-                      className="w-full bg-black border border-zinc-700 text-white rounded-xl py-4 px-4 text-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all font-mono tracking-wide placeholder-zinc-700"
-                    />
-                    <div className="absolute right-4 top-4 text-green-500">
-                       <ShieldCheck size={24} opacity={cpf.length >= 14 ? 1 : 0.3} />
-                    </div>
-                 </div>
-              </div>
+        <div className="space-y-6">
+           <form onSubmit={handleSubmit} className="space-y-4">
+              
+              {/* Campo CPF (Estilizado como E-mail na imagem para manter fidelidade visual) */}
+              <Input 
+                placeholder="CPF do Titular"
+                value={cpf}
+                onChange={handleCpfChange}
+                icon={<Mail size={20} />}
+                maxLength={14}
+                className="tracking-wider"
+              />
+
+              {/* Campo Senha (Visual - Opcional na lógica atual, mas presente no layout) */}
+              <Input 
+                type={showPassword ? "text" : "password"}
+                placeholder="Senha (Opcional para acesso rápido)"
+                icon={<Lock size={20} />}
+                rightElement={
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-zinc-500 hover:text-white">
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                }
+              />
 
               {error && (
-                 <div className="text-red-400 text-xs bg-red-900/20 p-3 rounded-lg border border-red-900/50 text-center">
+                 <div className="text-red-400 text-xs bg-red-500/10 p-3 rounded-lg border border-red-500/20 text-center">
                     {error}
                  </div>
               )}
 
-              <button 
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-green-900/40 transition-all active:scale-95 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              <Button 
+                type="submit" 
+                isLoading={isLoading}
+                className="mt-2 py-4 text-base"
               >
-                {isLoading ? 'Acessando...' : 'Acessar Central'}
-                {!isLoading && <ArrowRight size={20} className="ml-2" />}
-              </button>
+                Entrar <ArrowRight size={20} className="ml-2" />
+              </Button>
            </form>
-        </div>
 
-        <p className="text-center text-zinc-600 text-xs mt-8">
-           Precisa de ajuda? <span className="text-zinc-400 underline cursor-pointer">Fale com o Suporte</span>
-        </p>
+           <div className="text-center">
+             <a href="#" className="text-[#0066FF] text-sm hover:underline">Esqueci minha senha</a>
+           </div>
+
+           <div className="pt-8 text-center">
+              <p className="text-zinc-500 text-sm mb-2">Ainda não é cliente?</p>
+              <a href="#" className="text-[#0066FF] text-sm font-bold hover:underline">Conheça nossa empresa</a>
+           </div>
+        </div>
       </div>
     </div>
   );
