@@ -1,22 +1,27 @@
 /*
- * FiberNet Backend API - V6 (Correção Base64 Definitiva)
+ * FiberNet Backend API - Lint Fixed & Optimized
  */
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const helmet = require("helmet");
+const helmet = require("helmet"); // Agora usado
+const rateLimit = require("express-rate-limit");
 const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
-// REMOVIDO: const base64 = require('react-native-base64'); <--- O CULPADO
 const axios = require("axios");
-const cheerio = require("cheerio");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const cheerio = require("cheerio"); // Agora usado no Bot
+const { GoogleGenerativeAI } = require("@google/generative-ai"); // Agora usado
 
 // Speedtest Seguro
 let speedTest;
 try {
   speedTest = require("speedtest-net");
-} catch (e) {}
+} catch (e) {
+  console.warn("Speedtest module missing");
+}
+
+const ontRoutes = require("./routes/ont");
+const GenieACSService = require("./services/genieacs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,30 +29,37 @@ const PORT = process.env.PORT || 3000;
 // --- CONFIGURAÇÃO ---
 app.set("trust proxy", 1);
 app.use(cors({ origin: "*" }));
+app.use(helmet()); // Ativando segurança básica
 app.use(bodyParser.json());
+
+// Rate Limiter
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
+app.use("/api/", limiter);
 
 // Variáveis
 const IXC_API_URL =
   process.env.IXC_API_URL || "https://centralfiber.online/webservice/v1";
 const IXC_ADMIN_TOKEN = process.env.IXC_ADMIN_TOKEN;
 const JWT_SECRET = process.env.JWT_SECRET || "secret_dev";
+const GENIEACS_URL = process.env.GENIEACS_URL || "http://localhost:7557";
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // Agora usado
 
-// --- CLIENTE IXC (CORRIGIDO) ---
-// Usamos Buffer (Nativo do Node.js) em vez de bibliotecas externas
-const tokenBase64 = Buffer.from(IXC_ADMIN_TOKEN || "").toString("base64");
+// Inicializa IA (Correção do erro 'genAI is not defined')
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || "");
 
+// Cliente IXC com Buffer explícito
 const ixcApi = axios.create({
   baseURL: IXC_API_URL,
   headers: {
     "Content-Type": "application/json",
-    Authorization: `Basic ${tokenBase64}`, // <--- CORREÇÃO AQUI
+    Authorization: `Basic ${Buffer.from(IXC_ADMIN_TOKEN || "").toString(
+      "base64"
+    )}`,
   },
   timeout: 15000,
 });
 
-// Helper de Pesquisa IXC
 const ixcPostList = async (endpoint, data) => {
   try {
     const config = { headers: { ixcsoft: "listar" } };
@@ -59,11 +71,18 @@ const ixcPostList = async (endpoint, data) => {
   }
 };
 
-// --- ROTAS (O resto do código permanece igual) ---
+const genieacs = new GenieACSService(
+  GENIEACS_URL,
+  process.env.GENIEACS_USER,
+  process.env.GENIEACS_PASSWORD
+);
+app.set("genieacs", genieacs);
+
+// --- ROTAS ---
 
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
-// Login CPF
+// 1. LOGIN
 app.post("/api/auth/login-cpf", async (req, res) => {
   const { cpf } = req.body;
   if (!cpf) return res.status(400).json({ error: "CPF obrigatório" });
@@ -79,6 +98,7 @@ app.post("/api/auth/login-cpf", async (req, res) => {
       sortname: "cliente.id",
       sortorder: "desc",
     };
+
     let clienteRes = await ixcPostList("/cliente", searchBody);
 
     if (clienteRes.total === 0 || !clienteRes.registros[0]) {
@@ -115,7 +135,7 @@ app.post("/api/auth/login-cpf", async (req, res) => {
   }
 });
 
-// Speedtest
+// 2. SPEEDTEST
 app.get("/api/speedtest", async (req, res) => {
   if (!speedTest)
     return res.status(503).json({ error: "Speedtest indisponível" });
@@ -131,6 +151,67 @@ app.get("/api/speedtest", async (req, res) => {
   }
 });
 
+// 3. CHATBOT (Gemini + DownDetector) - Correção de uso do genAI e cheerio
+app.post("/api/bot", async (req, res) => {
+  try {
+    const { message, history } = req.body;
+    let contextInfo = "";
+
+    const servicos = ["discord", "netflix", "youtube", "instagram", "facebook"];
+    const alvo = servicos.find((s) => message.toLowerCase().includes(s));
+
+    if (alvo) {
+      try {
+        const { data } = await axios.get(
+          `https://downdetector.com.br/fora-do-ar/${alvo}/`
+        );
+        const $ = cheerio.load(data); // Cheerio agora é usado
+        const status = $(".entry-title").first().text().trim();
+
+        if (status.toLowerCase().includes("problema")) {
+          contextInfo = `ALERTA: O DownDetector reporta problemas no ${alvo}.`;
+        } else {
+          contextInfo = `STATUS: O DownDetector diz que o ${alvo} está normal.`;
+        }
+      } catch (e) {
+        contextInfo = `Não foi possível verificar o ${alvo}.`;
+      }
+    }
+
+    // Uso correto do genAI (que agora está definido)
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const chat = model.startChat({
+      history:
+        history?.map((h) => ({
+          role: h.role === "user" ? "user" : "model",
+          parts: [{ text: h.content }],
+        })) || [],
+    });
+
+    const prompt = `Você é o suporte da FiberNet. Contexto técnico: ${contextInfo}. Responda de forma breve.`;
+    const result = await chat.sendMessage(prompt + " " + message);
+
+    res.json({ reply: result.response.text() });
+  } catch (error) {
+    console.error("Erro Bot:", error);
+    res.json({ reply: "Desculpe, estou indisponível no momento." });
+  }
+});
+
+// 4. ROTAS PROTEGIDAS
+const checkAuth = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Token necessário" });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (e) {
+    res.status(401).json({ error: "Token inválido" });
+  }
+};
+
+app.use("/api/ont", checkAuth, ontRoutes);
+
 // Notícias
 app.get("/api/news", async (req, res) => {
   if (!NEWS_API_KEY) return res.json([]);
@@ -144,17 +225,6 @@ app.get("/api/news", async (req, res) => {
   }
 });
 
-// Chatbot
-app.post("/api/bot", async (req, res) => {
-  try {
-    const { message } = req.body;
-    // ... (Lógica simplificada para teste)
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(message);
-    res.json({ reply: result.response.text() });
-  } catch (e) {
-    res.json({ reply: "Erro no bot." });
-  }
-});
+app.use((req, res) => res.status(404).json({ error: "Rota não encontrada" }));
 
-app.listen(PORT, () => console.log(`Backend rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
