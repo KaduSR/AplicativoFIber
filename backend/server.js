@@ -1,10 +1,12 @@
 /*
- * FiberNet Backend API - Final Fixed
+ * FiberNet Backend API - Final Fixed (Order Corrected)
  */
 require("dotenv").config();
+const { Buffer } = require("node:buffer"); // Correção Buffer
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
@@ -14,6 +16,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 // Serviços
 const ixcService = require("./services/ixc");
 const GenieACSService = require("./services/genieacs");
+const ontRoutes = require("./routes/ont"); // Importando rotas ONT
 
 // Speedtest Seguro
 let speedTest;
@@ -23,7 +26,7 @@ try {
   console.warn("Speedtest missing");
 }
 
-// --- 1. INICIALIZAÇÃO DO APP (CRÍTICO: Deve vir antes das rotas) ---
+// --- 1. INICIALIZAÇÃO ---
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -33,13 +36,17 @@ app.use(cors({ origin: "*" }));
 app.use(bodyParser.json());
 app.use(helmet());
 
+// Rate Limiter
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
+app.use("/api/", limiter);
+
 // Variáveis
 const JWT_SECRET = process.env.JWT_SECRET || "secret_dev";
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GENIEACS_URL = process.env.GENIEACS_URL || "http://localhost:7557";
 
-// Inicializa Serviços
+// Inicializa Serviços Externos
 const genieacs = new GenieACSService(
   GENIEACS_URL,
   process.env.GENIEACS_USER,
@@ -49,11 +56,30 @@ app.set("genieacs", genieacs);
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || "");
 
-// --- 3. ROTAS (Agora 'app' existe e pode ser usado) ---
+// ==========================================
+// MIDDLEWARE DE AUTENTICAÇÃO (DEFINIDO ANTES DO USO)
+// ==========================================
+const checkAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Token necessário" });
+  }
+  const token = authHeader.split(" ")[1];
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (e) {
+    res.status(401).json({ error: "Token inválido" });
+  }
+};
+
+// ==========================================
+// ROTAS PÚBLICAS
+// ==========================================
 
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
-// Login Padrão
+// Login Padrão (Senha)
 app.post("/api/auth/login", async (req, res, next) => {
   const { login, senha } = req.body;
   if (!login || !senha)
@@ -87,7 +113,7 @@ app.post("/api/auth/login", async (req, res, next) => {
   }
 });
 
-// Login CPF
+// Login CPF (Acesso Rápido)
 app.post("/api/auth/login-cpf", async (req, res, next) => {
   const { cpf } = req.body;
   if (!cpf) return res.status(400).json({ error: "CPF obrigatório." });
@@ -118,53 +144,6 @@ app.post("/api/auth/login-cpf", async (req, res, next) => {
   }
 });
 
-// Em: backend/server.js
-
-// --- ROTA DE FATURAS CORRIGIDA (Com Mapeamento) ---
-app.get('/api/invoices', checkAuth, async (req, res, next) => {
-  try {
-    console.log(`[Faturas] Buscando faturas para cliente ID: ${req.user.id_cliente}`);
-
-    // 1. Busca no IXC
-    const body = { 
-      qtype: 'fn_areceber.id_cliente', 
-      query: req.user.id_cliente, 
-      oper: '=', 
-      page: '1', 
-      rp: '20', // Últimas 20 faturas
-      sortname: 'fn_areceber.data_vencimento', 
-      sortorder: 'desc' 
-    };
-    
-    const data = await ixcPostList('/fn_areceber', body);
-
-    // 2. Verifica se voltou algo
-    if (!data.registros || data.registros.length === 0) {
-      console.log("[Faturas] Nenhuma fatura encontrada.");
-      return res.json([]);
-    }
-
-    // 3. MAPEAMENTO (A Correção Crítica)
-    // Transforma os nomes estranhos do IXC em nomes amigáveis para o Frontend
-    const faturasFormatadas = data.registros.map(fatura => ({
-      id: fatura.id,
-      valor: fatura.valor,            // IXC manda 'valor'
-      vencimento: fatura.data_vencimento, // IXC manda 'data_vencimento'
-      status: fatura.status,          // 'A' (Aberto) ou 'B' (Baixado/Pago)
-      status_desc: fatura.status === 'A' ? 'Em Aberto' : 'Pago',
-      linha_digitavel: fatura.linha_digitavel || '',
-      link_boleto: fatura.link_boleto || '' // Se houver
-    }));
-
-    console.log(`[Faturas] ${faturasFormatadas.length} faturas enviadas.`);
-    res.json(faturasFormatadas);
-
-  } catch (e) { 
-    console.error("[Faturas] Erro:", e.message);
-    next(e); 
-  }
-});
-
 // Speedtest
 app.get("/api/speedtest", async (req, res) => {
   if (!speedTest) return res.status(503).json({ error: "Indisponível" });
@@ -180,12 +159,42 @@ app.get("/api/speedtest", async (req, res) => {
   }
 });
 
-// Bot
+// Bot (Gemini + DownDetector)
 app.post("/api/bot", async (req, res) => {
   try {
     const { message } = req.body;
+    let contextInfo = "";
+    const apps = [
+      "discord",
+      "netflix",
+      "youtube",
+      "instagram",
+      "facebook",
+      "whatsapp",
+    ];
+    const appDetectado = apps.find((s) => message.toLowerCase().includes(s));
+
+    if (appDetectado) {
+      try {
+        const { data } = await axios.get(
+          `https://downdetector.com.br/fora-do-ar/${appDetectado}/`
+        );
+        const $ = cheerio.load(data);
+        const status = $(".entry-title").first().text().trim();
+        if (status.toLowerCase().includes("problema")) {
+          contextInfo = `ALERTA: DownDetector reporta falhas no ${appDetectado}.`;
+        } else {
+          contextInfo = `STATUS: DownDetector diz que ${appDetectado} está normal.`;
+        }
+      } catch (e) {
+        /* Ignora erro de scraping */
+      }
+    }
+
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(message);
+    const result = await model.generateContent(
+      `Você é o suporte da FiberNet. ${contextInfo} ${message}`
+    );
     res.json({ reply: result.response.text() });
   } catch (e) {
     res.json({ reply: "Erro no bot." });
@@ -203,6 +212,49 @@ app.get("/api/news", async (req, res) => {
   } catch (e) {
     res.json([]);
   }
+});
+
+// ==========================================
+// ROTAS PROTEGIDAS (Usam checkAuth)
+// ==========================================
+
+app.get("/api/invoices", checkAuth, async (req, res, next) => {
+  try {
+    const faturas = await ixcService.getFaturas(req.user.id_cliente);
+
+    // Formatação para o Frontend
+    const faturasFormatadas = faturas.map((f) => ({
+      id: f.id,
+      valor: f.valor,
+      vencimento: f.data_vencimento,
+      status: f.status,
+      linha_digitavel: f.linha_digitavel,
+    }));
+
+    res.json(faturasFormatadas);
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.get("/api/boleto/:id", checkAuth, async (req, res, next) => {
+  try {
+    const dadosBoleto = await ixcService.getBoleto(req.params.id);
+    res.json(dadosBoleto);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Rotas da ONT (GenieACS) - Usam o arquivo routes/ont.js
+// Precisamos passar o checkAuth para dentro do router ou usar aqui
+app.use("/api/ont", checkAuth, ontRoutes);
+
+// --- ERROR HANDLING ---
+app.use((req, res) => res.status(404).json({ error: "Rota não encontrada" }));
+app.use((err, req, res, next) => {
+  console.error("Erro Servidor:", err.message);
+  res.status(500).json({ error: "Erro interno" });
 });
 
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
