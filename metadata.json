@@ -1,5 +1,0 @@
-{
-  "name": "FiberNet Customer Portal",
-  "description": "A comprehensive ISP customer portal featuring secure authentication, invoice management, connection diagnostics, and an AI-powered support assistant utilizing Gemini and context-aware scraping.",
-  "requestFramePermissions": []
-}
