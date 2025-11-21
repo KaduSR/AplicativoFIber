@@ -24,7 +24,7 @@ app.set("trust proxy", 1);
 app.use(cors({ origin: "*" }));
 
 // Aumentei o limite global de JSON
-app.use(express.json({ limit: "1024mb" }));
+app.use(express.json({ limit: "700mb" }));
 app.use(express.static("public"));
 
 // Configuração Específica para Speedtest (700MB conforme seu ajuste)
