@@ -1,10 +1,9 @@
-// services/downdetector.js
 const axios = require("axios");
 const cheerio = require("cheerio");
 
-// Configuração do cliente HTTP para parecer um navegador real
+// Configuração do cliente HTTP (Headers reais para evitar bloqueio 403)
 const browserClient = axios.create({
-  timeout: 10000, // Aumentei para 10s
+  timeout: 15000,
   headers: {
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -13,59 +12,87 @@ const browserClient = axios.create({
     "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
     "Cache-Control": "no-cache",
     Pragma: "no-cache",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
   },
 });
 
 let cache = {
   lastUpdate: 0,
   data: [],
-  ttl: 5 * 60 * 1000, // 5 minutos (reduzi para testar mais rápido)
+  ttl: 15 * 60 * 1000, // 15 minutos de cache para não sobrecarregar
 };
 
-const servicesToCheck = [
-  { id: "discord", name: "Discord" },
-  { id: "netflix", name: "Netflix" },
-  { id: "youtube", name: "YouTube" },
-  { id: "instagram", name: "Instagram" },
-  { id: "facebook", name: "Facebook" },
-  { id: "whatsapp-messenger", name: "WhatsApp" },
-  { id: "tiktok", name: "TikTok" },
-  { id: "roblox", name: "Roblox" },
-  { id: "nubank", name: "Nubank" },
-  { id: "banco-inter", name: "Inter" },
-];
+// --- NOVA FUNÇÃO: Busca a lista de serviços direto da Home ---
+async function fetchTopServices() {
+  try {
+    console.log("🔍 Buscando lista de serviços em alta no Downdetector...");
+    const { data } = await browserClient.get("https://downdetector.com.br/");
+    const $ = cheerio.load(data);
 
-async function checkService(serviceId, serviceName) {
-  const url = `https://downdetector.com.br/fora-do-ar/${serviceId}/`;
+    const services = [];
+
+    // Seleciona os cards da home (pode variar o seletor, este é genérico para links de status)
+    // Geralmente são links no formato /status/nome-do-servico/
+    $('a[href^="/status/"]').each((i, el) => {
+      const href = $(el).attr("href");
+      // Extrai o ID da URL (ex: /status/whatsapp/ -> whatsapp)
+      const id = href.replace("/status/", "").replace("/", "");
+
+      // Tenta achar o nome legível (geralmente está num h3, div ou no texto do link)
+      let name = $(el).find(".service-name, h3, h4").text().trim();
+      if (!name) name = id.charAt(0).toUpperCase() + id.slice(1); // Fallback
+
+      // Evita duplicatas e links inválidos
+      if (id && !services.find((s) => s.id === id)) {
+        services.push({ id, name });
+      }
+    });
+
+    console.log(
+      `📋 Encontrados ${services.length} serviços na página inicial.`
+    );
+    return services;
+  } catch (error) {
+    console.error("❌ Erro ao buscar lista de serviços:", error.message);
+    // Retorna lista de fallback caso a home falhe
+    return [
+      { id: "whatsapp-messenger", name: "WhatsApp" },
+      { id: "instagram", name: "Instagram" },
+      { id: "facebook", name: "Facebook" },
+      { id: "youtube", name: "YouTube" },
+      { id: "nubank", name: "Nubank" },
+    ];
+  }
+}
+
+async function checkService(service) {
+  const url = `https://downdetector.com.br/status/${service.id}/`;
 
   try {
     const { data } = await browserClient.get(url);
     const $ = cheerio.load(data);
 
-    // Tenta capturar o título de várias formas
-    // O Downdetector varia entre h2, h1 ou classes específicas dependendo do layout
+    // Captura o texto de status
     let statusText =
       $(".entry-title").text().trim() ||
-      $("h2.h2").first().text().trim() ||
       $("div.indicator-title").text().trim() ||
       "";
-
     statusText = statusText.toLowerCase();
-
-    // Lógica de Detecção
-    // 1. Se tiver "problemas" E "não" na mesma frase, provavelmente é "não há problemas"
-    // 2. Se tiver "problemas" ou "falha" e NÃO tiver "não", é erro real.
 
     let status = "operational";
     let isFailure = false;
 
-    // Verifica palavras-chave de erro
+    // Lógica de detecção de palavras-chave
     if (
       statusText.includes("problema") ||
       statusText.includes("falha") ||
       statusText.includes("instabilidade")
     ) {
-      // Verifica se é um falso positivo ("não indicam problemas")
+      // Verifica falsos positivos ("não indicam problemas")
       if (
         !statusText.includes("não indicam") &&
         !statusText.includes("sem problemas")
@@ -75,30 +102,22 @@ async function checkService(serviceId, serviceName) {
       }
     }
 
-    // LOG PARA DEBUG (Importante para ver no terminal se está funcionando)
-    if (isFailure) {
-      console.log(
-        `[ALERTA] ${serviceName}: Detectado -> "${statusText.substring(
-          0,
-          50
-        )}..."`
-      );
-    }
+    // Busca número de notificações (opcional, para medir gravidade)
+    // Ex: "Relatórios de problemas: 543"
+    // const reportsText = $(".uw-heatmap-label").text() || "";
 
     return {
-      id: serviceId,
-      name: serviceName,
+      id: service.id,
+      name: service.name,
       status: status,
       updatedAt: new Date().toISOString(),
-      // Opcional: mandar o texto para o front saber o motivo
       reason: isFailure ? statusText : null,
     };
   } catch (e) {
-    console.error(`[ERRO] Falha ao checar ${serviceName}: ${e.message}`);
-    // Em caso de erro, retorna operacional para não travar o app
+    // Se der 404 ou erro, assume operacional para não quebrar a lista
     return {
-      id: serviceId,
-      name: serviceName,
+      id: service.id,
+      name: service.name,
       status: "operational",
       updatedAt: new Date().toISOString(),
     };
@@ -113,22 +132,33 @@ async function getInstabilities() {
     return cache.data;
   }
 
-  console.log("🔄 Iniciando varredura do Downdetector...");
+  // 1. Busca a lista dinâmica de serviços
+  const allServices = await fetchTopServices();
 
-  // Busca dados em paralelo
-  const results = await Promise.all(
-    servicesToCheck.map((s) => checkService(s.id, s.name))
-  );
+  // 2. Filtra os Top 30 (para não demorar 5 minutos fazendo requests)
+  // Se quiser todos, remova o .slice, mas cuidado com timeout do Render/Heroku
+  const targetServices = allServices.slice(0, 30);
 
-  // Filtra APENAS quem tem problema (warning)
+  console.log(`🔄 Verificando status de ${targetServices.length} serviços...`);
+
+  // 3. Checa status em paralelo
+  // Adicionamos um pequeno delay aleatório para não parecer ataque DDoS
+  const promises = targetServices.map(async (s, index) => {
+    await new Promise((resolve) => setTimeout(resolve, index * 100)); // Delay escalonado
+    return checkService(s);
+  });
+
+  const results = await Promise.all(promises);
+
+  // 4. Filtra apenas quem tem problema
   const problems = results.filter((r) => r.status !== "operational");
+
+  console.log(
+    `✅ Varredura concluída. ${problems.length} instabilidades detectadas.`
+  );
 
   // Atualiza cache
   cache = { lastUpdate: now, data: problems };
-
-  console.log(
-    `✅ Varredura concluída. ${problems.length} serviços com problemas encontrados.`
-  );
 
   return problems;
 }
