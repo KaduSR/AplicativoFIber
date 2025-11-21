@@ -8,58 +8,68 @@ const rateLimit = require("express-rate-limit");
 
 // --- IMPORTAÇÃO DE SERVIÇOS ---
 const GenieACSService = require("./services/genieacs");
-// O IXC já exporta uma instância (new IXCService), então não precisa instanciar aqui
-// const ixcService = require("./services/ixc");
 
 // --- IMPORTAÇÃO DAS ROTAS ---
-const instabilidadeRoutes = require("./routes/instabilidade"); // Adicionado o "."
+const speedtestRoute = require("./routes/speedtest");
+const instabilidadeRoutes = require("./routes/instabilidade");
 const ontRoutes = require("./routes/ont");
-const financeiroRoutes = require("./routes/financeiro"); // Sugestão para usar o ixc.js
+// const financeiroRoutes = require("./routes/financeiro");
 
 // --- CONFIGURAÇÃO DO APP ---
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- INICIALIZAÇÃO DE SERVIÇOS ---
-// Inicializa o GenieACS com as variáveis de ambiente
 const genieacs = new GenieACSService(
   process.env.GENIEACS_URL,
   process.env.GENIEACS_USER,
   process.env.GENIEACS_PASSWORD
 );
 
-// Injeta o serviço no app para ser acessível nas rotas via req.app.get('genieacs')
 app.set("genieacs", genieacs);
 
-// --- MIDDLEWARES ---
+// --- MIDDLEWARES GERAIS ---
 app.set("trust proxy", 1);
-app.use(cors({ origin: "*" })); // Em produção, restrinja as origens
-app.use(express.json());
+app.use(cors({ origin: "*" }));
+app.use(express.json()); // Parse JSON para rotas normais
+
+// --- CONFIGURAÇÃO SPEEDTEST (IMPORTANTE) ---
+// 1. Serve os arquivos visuais (HTML/JS do velocímetro) na raiz
+app.use(express.static("public"));
+
+// 2. Configuração especial para UPLOAD (permite blobs grandes apenas nesta rota)
+app.use(
+  "/api/speedtest",
+  express.raw({ limit: "100mb", type: "application/octet-stream" })
+);
+app.use(
+  "/api/speedtest",
+  express.urlencoded({ extended: true, limit: "20mb" })
+);
 
 // Rate Limit (Proteção básica)
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 300, // Limite de requisições
+  windowMs: 15 * 60 * 1000,
+  max: 300,
   message: { error: "Muitas requisições. Tente novamente mais tarde." },
 });
 app.use("/api/", limiter);
 
-// --- ROTAS ---
+// --- DEFINIÇÃO DAS ROTAS ---
 app.get("/health", (req, res) =>
   res.json({ status: "online", uptime: process.uptime() })
 );
 
-// Rota: Status/DownDetector
+// Rotas da Aplicação
 app.use("/api/status", instabilidadeRoutes);
-
-// Rota: ONT/GenieACS
 app.use("/api/ont", ontRoutes);
+app.use("/api/speedtest", speedtestRoute); // Conecta a rota de teste
 
-// Rota 404 - Handler para rotas inexistentes
+// Handler 404
 app.use((req, res) => res.status(404).json({ error: "Rota não encontrada." }));
 
 // --- START ---
 app.listen(PORT, () => {
   console.log(`🚀 Backend FiberNet rodando na porta ${PORT}`);
-  console.log(`📡 Serviços Ativos: Instabilidade, ONT (GenieACS)`);
+  console.log(`📡 Serviços Ativos: Instabilidade, ONT, SpeedTest`);
 });
