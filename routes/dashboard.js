@@ -1,9 +1,11 @@
-// routes/dashboard.js
+// AplicativoFIber/routes/dashboard.js
 const express = require("express");
 const router = express.Router();
-const dashboardController = require("../controllers/dashboardController");
 const authenticate = require("../middleware/authenticate");
+const dashboardController = require("../controllers/dashboardController");
 
-router.get("/overview", authenticate, dashboardController.getDashboard);
+// Rotas Dashboard
+// Todas as rotas do dashboard exigem autenticação
+router.get("/dados", authenticate, dashboardController.getDashboardData);
 
 module.exports = router;
