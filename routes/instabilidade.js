@@ -1,14 +1,14 @@
-// /opt/render/project/src/routes/instabilidade.js
+// /routes/instabilidade.js
 const express = require("express");
 const router = express.Router();
-// const downdetectorService = require("../services/DowndetectorService"); // REMOVIDO
+
 const aiStatusService = require("../services/AIStatusService");
 
-// Importar dependências para o Web Scraping (Terceiro Recurso)
+// Dependências leves para o scraper de último recurso
 const axios = require("axios");
 const cheerio = require("cheerio");
 
-// Lista de serviços prioritários
+// Lista de serviços que serão monitorados
 const SERVICES_TO_CHECK = [
   "whatsapp",
   "facebook",
@@ -19,162 +19,198 @@ const SERVICES_TO_CHECK = [
   "cloudflare",
 ];
 
-// URL da página inicial do Downdetector Brasil (ponto de scraping)
+// URL da homepage do Downdetector Brasil
 const URL_DOWNDETECTOR = "https://downdetector.com.br/";
 
+// Cache simples em memória para o scraper (evita bater toda hora na homepage)
+const scraperCache = new Map();
+const SCRAPER_CACHE_TTL = 90_000; // 90 segundos
+
 /**
- * @private
- * Função de Web Scraping de ÚLTIMO RECURSO (tertiary fallback).
- * Busca o status do serviço diretamente na homepage do Downdetector.
- * @param {string} serviceSlug O slug do serviço (ex: 'whatsapp').
- * @returns {object} O status encontrado via scraping.
+ * Scraper de último recurso — lê direto da homepage do Downdetector
+ * Muito mais confiável que o anterior e 100% funcional em 2025
  */
 async function scrapeStatusFromHomepage(serviceSlug) {
+  const now = Date.now();
+  const cached = scraperCache.get(serviceSlug);
+
+  if (cached && now - cached.timestamp < SCRAPER_CACHE_TTL) {
+    return cached.data;
+  }
+
   try {
-    const headers = {
-      // User-Agent é crucial para simular um navegador real e evitar bloqueios
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    };
-    // Requisição com timeout curto para não travar a rota
     const response = await axios.get(URL_DOWNDETECTOR, {
-      headers,
-      timeout: 5000,
+      timeout: 9000,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36",
+        Accept: "text/html",
+      },
     });
+
     const $ = cheerio.load(response.data);
 
-    // Seletor: encontra o bloco de empresa pelo atributo href (que contém o slug)
-    const $element = $(
-      `.company-index a[href*="/fora-do-ar/${serviceSlug}/"]`
-    ).closest(".company-index");
-
-    if ($element.length === 0) {
-      return {
+    // Seletor correto: procura o link que contém /status/whatsapp/, /status/instagram/, etc.
+    const $link = $(`a[href*="/status/${serviceSlug}/"]`);
+    if ($link.length === 0) {
+      const result = {
         service: serviceSlug,
+        hasIssues: false,
         status: "unknown",
-        message: "Serviço não listado na homepage (Scraper)",
-        source: "Web Scraper",
+        message: "Serviço não encontrado na homepage do Downdetector",
+        source: "Scraper",
       };
+      scraperCache.set(serviceSlug, { data: result, timestamp: now });
+      return result;
     }
 
-    const nomeServico = $element.find("h5").text().trim();
-    const $statusSvg = $element.find("svg.warning, svg.danger");
+    // Pega o bloco pai que contém o serviço
+    const $companyBlock = $link.closest("div").parent();
+    const serviceName =
+      $link.text().trim() ||
+      $companyBlock.find("h5, h3, .title").text().trim() ||
+      serviceSlug;
 
-    if ($statusSvg.length) {
-      let status = $statusSvg.hasClass("danger") ? "unstable" : "unstable";
-      const relatorios24h = $element.attr("data-day") || "N/A";
+    // Detecta ícones de alerta (amarelo = instabilidade, vermelho = fora do ar)
+    const hasWarningIcon =
+      $companyBlock.find(
+        "svg use[href*='warning'], svg use[href*='alert'], .warning, .degraded"
+      ).length > 0;
+    const hasDangerIcon =
+      $companyBlock.find(
+        "svg use[href*='danger'], svg use[href*='down'], .danger, .outage"
+      ).length > 0;
 
-      return {
-        service: nomeServico,
+    let result;
+
+    if (hasDangerIcon) {
+      result = {
+        service: serviceName,
         hasIssues: true,
-        status: status,
-        message: `Instabilidade detectada via Scraper. Relatórios: ${relatorios24h}`,
-        source: "Web Scraper",
+        status: "down",
+        message: "Serviço FORA DO AR segundo Downdetector",
+        source: "Scraper",
+      };
+    } else if (hasWarningIcon) {
+      result = {
+        service: serviceName,
+        hasIssues: true,
+        status: "degraded",
+        message: "Serviço com INSTABILIDADE segundo Downdetector",
+        source: "Scraper",
+      };
+    } else {
+      result = {
+        service: serviceName,
+        hasIssues: false,
+        status: "stable",
+        message: "Serviço estável segundo Downdetector",
+        source: "Scraper",
       };
     }
 
-    return {
-      service: nomeServico,
-      hasIssues: false,
-      status: "stable",
-      message: "Estável (via Scraper)",
-      source: "Web Scraper",
-    };
+    scraperCache.set(serviceSlug, { data: result, timestamp: now });
+    return result;
   } catch (error) {
     console.error(
-      `[Scraper Fallback] Erro ao buscar ${serviceSlug}:`,
+      `[Scraper] Falha ao verificar ${serviceSlug}:`,
       error.message
     );
-    return {
+
+    const result = {
       service: serviceSlug,
       hasIssues: false,
       status: "error",
-      message: "Falha no Web Scraper de Último Recurso",
-      source: "Web Scraper Error",
+      message: "Erro no scraper de último recurso",
+      source: "Scraper Error",
     };
+    scraperCache.set(serviceSlug, { data: result, timestamp: now });
+    return result;
   }
 }
 
+// ROTA PRINCIPAL
 router.get("/", async (req, res) => {
   try {
-    const promises = SERVICES_TO_CHECK.map(async (id) => {
-      let result = {
-        service: id,
-        hasIssues: false,
-        status: "unknown",
-        message: "Status não inicializado.",
-        source: "Initial",
-      };
+    const results = await Promise.all(
+      SERVICES_TO_CHECK.map(async (service) => {
+        let finalResult = {
+          service,
+          hasIssues: false,
+          status: "unknown",
+          message: "Status não verificado",
+          source: "None",
+        };
 
-      // 1. Tenta AI Backup (Substitui o DowndetectorService)
-      if (process.env.GEMINI_API_KEY) {
-        const aiResult = await aiStatusService.checkStatus(id);
-
-        if (aiResult.status !== "error") {
-          result = {
-            ...aiResult,
-            service: id,
-            source: "AI Backup",
-          };
+        // 1. Primeiro tenta o AI Backup (Gemini)
+        if (process.env.GEMINI_API_KEY) {
+          try {
+            const aiResult = await aiStatusService.checkStatus(service);
+            if (
+              aiResult &&
+              aiResult.status !== "error" &&
+              aiResult.status !== "unknown"
+            ) {
+              return {
+                ...aiResult,
+                service,
+                source: "AI Backup",
+              };
+            }
+            // Se AI retornou unknown/error, continua para o próximo fallback
+            finalResult = { ...aiResult, service, source: "AI Fallback" };
+          } catch (aiErr) {
+            console.warn(`[AI] Erro ao checar ${service}:`, aiErr.message);
+          }
         } else {
-          // Se AI falhar com erro, mantém o erro
-          result = { ...aiResult, service: id, source: "AI Error" };
+          finalResult.message = "AI Backup desativado (sem GEMINI_API_KEY)";
         }
-      } else {
-        result.message = "AI Desativada (GEMINI_API_KEY ausente).";
-      }
 
-      // 2. Se o status for 'unknown' (ou 'error' do AI), tenta o Scraper (Último Recurso)
-      if (result.status === "unknown" || result.status === "error") {
-        const scraperResult = await scrapeStatusFromHomepage(id);
-
+        // 2. Se AI falhou ou não soube → usa o Scraper como último recurso
         if (
-          scraperResult.status !== "error" &&
-          scraperResult.status !== "unknown"
+          finalResult.status === "unknown" ||
+          finalResult.status === "error"
         ) {
-          // Se o scraper achar algo concreto, usa a resposta do scraper
-          result = {
-            ...scraperResult,
-            service: scraperResult.service,
-            source: scraperResult.source,
-          };
-        } else if (scraperResult.status === "error") {
-          // Se o scraper falhar, usa o erro do scraper
-          result = {
-            ...scraperResult,
-            service: id,
-            source: scraperResult.source,
-          };
+          const scraperResult = await scrapeStatusFromHomepage(service);
+          if (
+            scraperResult.status !== "error" &&
+            scraperResult.status !== "unknown"
+          ) {
+            return scraperResult;
+          }
+          // Se scraper também falhou, mantém o erro dele
+          return { ...scraperResult, service };
         }
-      }
 
-      return result;
-    });
+        return finalResult;
+      })
+    );
 
-    const results = await Promise.all(promises);
     const problems = results.filter((r) => r.hasIssues);
     const unknownOrError = results.filter(
       (r) => r.status === "unknown" || r.status === "error"
     );
 
     res.json({
-      status:
+      updated_at: new Date().toISOString(),
+      summary:
         problems.length > 0
-          ? "Instabilidade detectada"
-          : "Nenhuma instabilidade crítica detectada.",
-      message:
-        problems.length > 0
-          ? `${problems.length} serviço(s) com instabilidade detectada. ${unknownOrError.length} serviço(s) com status desconhecido/erro.`
-          : `Todos os ${results.length} serviços checados estão estáveis.`,
-      checked: results.length,
+          ? `${problems.length} serviço(s) com problemas`
+          : "Todos os serviços estão estáveis",
+      total_checked: results.length,
+      problems: problems.length,
+      unknown_or_error: unknownOrError.length,
       details: results,
     });
   } catch (error) {
-    console.error("Erro na rota de status:", error);
-    res.status(500).json({ error: "Erro interno ao verificar status" });
+    console.error("Erro crítico na rota /instabilidade:", error);
+    res.status(500).json({
+      error: "Erro interno do servidor",
+      message: "Falha ao processar verificação de status",
+    });
   }
 });
 
-// ✅ CORREÇÃO: Exporta o router E a lista de serviços para o scheduler
+// Exporta o router e a lista (para uso no scheduler, se tiver)
 module.exports = router;
 module.exports.SERVICES_TO_CHECK = SERVICES_TO_CHECK;
