@@ -19,7 +19,6 @@ const authRoutes = require("./routes/auth");
 const financeiroRoutes = require("./routes/financeiro");
 const dashboardRoutes = require("./routes/dashboard"); // <-- NOVO
 
-const { startScheduler } = require("./cron/statusScheduler");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -66,5 +65,4 @@ app.use((req, res) => res.status(404).json({ error: "Rota não encontrada." }));
 app.listen(PORT, () => {
   console.log(`🚀 Backend rodando na porta ${PORT}`);
   // Inicia o scheduler após o servidor subir
-  startScheduler();
 });
