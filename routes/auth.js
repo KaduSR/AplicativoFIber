@@ -2,11 +2,12 @@
 
 const express = require("express");
 const router = express.Router();
-// 💡 CORREÇÃO: Certifique-se de que a letra inicial é MINÚSCULA ('authController')
-// ou o nome exato do seu arquivo dentro da pasta 'controllers'.
+// 💡 Garanta que este caminho e o nome do arquivo (authController.js) estão corretos.
+// Em ambientes Linux (Render), o nome deve ser exato (case-sensitive).
 const AuthController = require("../controllers/authController");
 
-// Rota POST para /api/v1/auth/login
+// Rota POST: /api/v1/auth/login
+// O prefixo /api/v1/auth é definido no server.js
 router.post("/login", AuthController.login);
 
 module.exports = router;
