@@ -1,7 +1,7 @@
 // /opt/render/project/src/routes/instabilidade.js
 const express = require("express");
 const router = express.Router();
-const downdetectorService = require("../services/DowndetectorService");
+// const downdetectorService = require("../services/DowndetectorService"); // REMOVIDO
 const aiStatusService = require("../services/AIStatusService");
 
 // Importar dependências para o Web Scraping (Terceiro Recurso)
@@ -98,43 +98,53 @@ async function scrapeStatusFromHomepage(serviceSlug) {
 router.get("/", async (req, res) => {
   try {
     const promises = SERVICES_TO_CHECK.map(async (id) => {
-      let result = {};
-      result = await downdetectorService.getStatus(id);
+      let result = {
+        service: id,
+        hasIssues: false,
+        status: "unknown",
+        message: "Status não inicializado.",
+        source: "Initial",
+      };
 
-      if (result.status === "unknown") {
-        if (process.env.GEMINI_API_KEY) {
-          const aiResult = await aiStatusService.checkStatus(id);
+      // 1. Tenta AI Backup (Substitui o DowndetectorService)
+      if (process.env.GEMINI_API_KEY) {
+        const aiResult = await aiStatusService.checkStatus(id);
 
-          if (aiResult.status !== "error") {
-            result = {
-              ...result,
-              hasIssues: aiResult.hasIssues,
-              message: aiResult.message,
-              source: "AI Backup",
-              status: aiResult.status,
-            };
-          }
+        if (aiResult.status !== "error") {
+          result = {
+            ...aiResult,
+            service: id,
+            source: "AI Backup",
+          };
+        } else {
+          // Se AI falhar com erro, mantém o erro
+          result = { ...aiResult, service: id, source: "AI Error" };
         }
+      } else {
+        result.message = "AI Desativada (GEMINI_API_KEY ausente).";
       }
 
-      if (result.status === "unknown") {
+      // 2. Se o status for 'unknown' (ou 'error' do AI), tenta o Scraper (Último Recurso)
+      if (result.status === "unknown" || result.status === "error") {
         const scraperResult = await scrapeStatusFromHomepage(id);
 
         if (
           scraperResult.status !== "error" &&
           scraperResult.status !== "unknown"
         ) {
+          // Se o scraper achar algo concreto, usa a resposta do scraper
           result = {
-            ...result,
+            ...scraperResult,
             service: scraperResult.service,
-            hasIssues: scraperResult.hasIssues,
-            status: scraperResult.status,
-            message: scraperResult.message,
             source: scraperResult.source,
           };
         } else if (scraperResult.status === "error") {
-          result.status = "error";
-          result.message = scraperResult.message;
+          // Se o scraper falhar, usa o erro do scraper
+          result = {
+            ...scraperResult,
+            service: id,
+            source: scraperResult.source,
+          };
         }
       }
 
