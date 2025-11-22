@@ -21,13 +21,12 @@
     "ipaddr.js": "^2.2.0",
     "jsonwebtoken": "^9.0.2",
     "node-cache": "^5.1.2",
-    "node-cron": "^3.0.3",
-    "universal-speedtest": "^1.0.0"
+    "node-cron": "^3.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   },
-"engines": {
+  "engines": {
     "node": ">=18.0.0 <23.0.0"
   }
 }
