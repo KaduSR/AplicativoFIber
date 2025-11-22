@@ -1,51 +1,36 @@
-/*
- * backend/controllers/speedtestController.js
- */
-const speedtestService = require("../services/speedtest");
+// controllers/SpeedtestController.js
+const { UniversalSpeedTest, SpeedUnits } = require("universal-speedtest");
 
-class SpeedtestController {
-  // GET /api/v1/speedtest/servers
-  async listServers(req, res) {
-    // Exemplo: Permitir que o cliente defina quantos servidores quer
-    const serversToFetch = parseInt(req.query.limit, 10) || 10;
+exports.run = async (req, res) => {
+  try {
+    // As opções para o teste podem ser ajustadas aqui ou vir do req.body, se necessário.
+    const speedtest = new UniversalSpeedTest({
+      tests: {
+        measureDownload: true,
+        measureUpload: true,
+      },
+      units: {
+        downloadUnit: SpeedUnits.Mbps,
+        uploadUnit: SpeedUnits.Mbps,
+      },
+    });
 
-    try {
-      const servers = await speedtestService.listServers(serversToFetch);
+    // Executa o teste completo
+    const results = await speedtest.performOoklaTest();
 
-      return res.status(200).json({
-        message: "Lista de servidores Ookla obtida com sucesso.",
-        data: servers,
-      });
-    } catch (error) {
-      console.error("[SpeedtestController] Erro ao listar servidores:", error);
-      return res.status(500).json({
-        message: "Erro interno no servidor ao listar servidores.",
-        error: error.message,
-      });
-    }
+    // Retorna os resultados chaves
+    return res.json({
+      ping: results.pingResult.latency,
+      jitter: results.pingResult.jitter,
+      download: results.downloadResult.speed,
+      upload: results.uploadResult.speed,
+      clientIp: results.client.ip,
+    });
+  } catch (error) {
+    console.error("Erro no Speedtest:", error);
+    // Falha no teste de velocidade retorna um erro 500
+    return res
+      .status(500)
+      .json({ message: "Falha ao executar teste de velocidade" });
   }
-
-  // POST /api/v1/speedtest/run
-  async runTest(req, res) {
-    // O corpo da requisição (req.body) pode conter opções customizadas
-    // para o teste, como { tests: { measureUpload: false } }
-    const options = req.body;
-
-    try {
-      const result = await speedtestService.runSpeedtest(options);
-
-      return res.status(200).json({
-        message: "Teste de velocidade concluído com sucesso.",
-        result: result,
-      });
-    } catch (error) {
-      // Em caso de erro na execução do teste (timeout, falha de conexão, etc.)
-      return res.status(500).json({
-        message: error.message,
-        status: 500,
-      });
-    }
-  }
-}
-
-module.exports = new SpeedtestController();
+};
