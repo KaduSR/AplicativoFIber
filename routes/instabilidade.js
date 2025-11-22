@@ -37,6 +37,12 @@ const SERVICES = [
   "discord",
   "steam",
   "twitch",
+  "cloudflare",
+  "dataprev",
+  "openai",
+  "discord",
+  "gemini",
+  "psn",
 ];
 
 // Keywords de reclamação no Twitter (as que mais bombam no Brasil)
@@ -83,6 +89,33 @@ const COMPLAINT_KEYWORDS = {
   discord: ["discord caiu", "disc fora", "discord bug"],
   steam: ["steam caiu", "steam fora", "steam não abre"],
   twitch: ["twitch caiu", "twitch fora", "twitch erro"],
+  cloudflare: [
+    "cloudflare caiu",
+    "cloudflare fora",
+    "cloudflare down",
+    "cloudflare erro 5xx",
+  ],
+  dataprev: [
+    "dataprev caiu",
+    "dataprev fora do ar",
+    "dataprev erro",
+    "inss app bug",
+  ],
+  openai: ["openai caiu", "chatgpt fora", "openai down", "gpt erro"],
+  discord: ["discord caiu", "discord fora", "disc bug", "discord não conecta"],
+  gemini: [
+    "gemini caiu",
+    "gemini ai fora",
+    "gemini erro",
+    "google gemini down",
+  ],
+  psn: [
+    "psn caiu",
+    "playstation network fora",
+    "psn down",
+    "ps store lento",
+    "psn timeout",
+  ],
 };
 
 // ===== 1. DETECÇÃO VIA TWITTER/X (PRIORIDADE MÁXIMA) =====
