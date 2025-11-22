@@ -1,4 +1,4 @@
-// routes/instabilidade.js
+// /opt/render/project/src/routes/instabilidade.js
 const express = require("express");
 const router = express.Router();
 const downdetectorService = require("../services/DowndetectorService");
@@ -44,13 +44,11 @@ async function scrapeStatusFromHomepage(serviceSlug) {
     const $ = cheerio.load(response.data);
 
     // Seletor: encontra o bloco de empresa pelo atributo href (que contém o slug)
-    // Usamos .closest() para pegar o contêiner principal do serviço
     const $element = $(
       `.company-index a[href*="/fora-do-ar/${serviceSlug}/"]`
     ).closest(".company-index");
 
     if ($element.length === 0) {
-      // Serviço não listado na homepage (ex: é um serviço menor)
       return {
         service: serviceSlug,
         status: "unknown",
@@ -63,7 +61,6 @@ async function scrapeStatusFromHomepage(serviceSlug) {
     const $statusSvg = $element.find("svg.warning, svg.danger");
 
     if ($statusSvg.length) {
-      // Se tiver classes warning ou danger, está instável
       let status = $statusSvg.hasClass("danger") ? "unstable" : "unstable";
       const relatorios24h = $element.attr("data-day") || "N/A";
 
@@ -76,7 +73,6 @@ async function scrapeStatusFromHomepage(serviceSlug) {
       };
     }
 
-    // Se o elemento existe, mas não tem warning/danger, está estável.
     return {
       service: nomeServico,
       hasIssues: false,
@@ -103,21 +99,17 @@ router.get("/", async (req, res) => {
   try {
     const promises = SERVICES_TO_CHECK.map(async (id) => {
       let result = {};
-
-      // 1. PRIMEIRO RECURSO: Downdetector API (Cache-First)
       result = await downdetectorService.getStatus(id);
 
-      // 2. SEGUNDO RECURSO: Se API falhou (status: unknown), tenta a IA
       if (result.status === "unknown") {
         if (process.env.GEMINI_API_KEY) {
           const aiResult = await aiStatusService.checkStatus(id);
 
-          // Se a IA respondeu com sucesso/estável/instável (e não erro)
           if (aiResult.status !== "error") {
             result = {
-              ...result, // Mantém estrutura base (reports/baseline)
+              ...result,
               hasIssues: aiResult.hasIssues,
-              message: aiResult.message, // Ex: "Nenhuma instabilidade grave reportada hoje"
+              message: aiResult.message,
               source: "AI Backup",
               status: aiResult.status,
             };
@@ -125,11 +117,9 @@ router.get("/", async (req, res) => {
         }
       }
 
-      // 3. TERCEIRO RECURSO: Se ainda for 'unknown', tenta o Web Scraper
       if (result.status === "unknown") {
         const scraperResult = await scrapeStatusFromHomepage(id);
 
-        // Se o scraper retornou um status válido (stable ou unstable)
         if (
           scraperResult.status !== "error" &&
           scraperResult.status !== "unknown"
@@ -143,7 +133,6 @@ router.get("/", async (req, res) => {
             source: scraperResult.source,
           };
         } else if (scraperResult.status === "error") {
-          // Se o scraper falhou com erro (não deve acontecer)
           result.status = "error";
           result.message = scraperResult.message;
         }
@@ -153,8 +142,6 @@ router.get("/", async (req, res) => {
     });
 
     const results = await Promise.all(promises);
-
-    // Filtra serviços com instabilidade ou erros de checagem
     const problems = results.filter((r) => r.hasIssues);
     const unknownOrError = results.filter(
       (r) => r.status === "unknown" || r.status === "error"
@@ -178,4 +165,6 @@ router.get("/", async (req, res) => {
   }
 });
 
+// ✅ CORREÇÃO: Exporta o router E a lista de serviços para o scheduler
 module.exports = router;
+module.exports.SERVICES_TO_CHECK = SERVICES_TO_CHECK;
