@@ -1,33 +1,20 @@
+// /opt/render/project/src/services/ixc.js
 const axios = require("axios");
-const crypto = require("crypto");
 
 class IXCService {
   constructor() {
-    this.apiUrl = process.env.IXC_API_URL;
-    this.token = Buffer.from(process.env.IXC_TOKEN).toString("base64");
-
+    // THIS is the likely problem spot (line 7)
+    const credentials = `${process.env.IXC_USER}:${process.env.IXC_PASSWORD}`;
+    this.authHeader = `Basic ${Buffer.from(credentials).toString("base64")}`; // If IXC_USER or IXC_PASSWORD is undefined, this fails.
     this.api = axios.create({
-      baseURL: this.apiUrl,
+      baseURL: process.env.IXC_BASE_URL,
       headers: {
-        Authorization: `Basic ${this.token}`,
-        "Content-Type": "application/json",
+        Authorization: this.authHeader,
       },
-      timeout: 10000,
     });
   }
 
-  async list(endpoint, params) {
-    try {
-      const response = await this.api.post(endpoint, params, {
-        headers: { ixcsoft: "listar" },
-      });
-      return response.data;
-    } catch (error) {
-      throw new Error(`IXC list error: ${error.message}`);
-    }
-  }
-
-  // Outros métodos como login, getFaturas, getBoleto (mantenha como está)
+  // ... other methods
 }
 
-module.exports = new IXCService();
+module.exports = new IXCService(); // Or similar export
