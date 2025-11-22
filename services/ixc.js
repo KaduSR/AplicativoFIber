@@ -11,7 +11,6 @@ const CONTRACT_PDF_BASE_URL =
 class IXCService {
   constructor() {
     // A variável IXC_ADMIN_TOKEN deve ser configurada no Render como "usuario:senha"
-    // ou apenas o token de acesso (depende da sua configuração IXC).
     const credentials = process.env.IXC_ADMIN_TOKEN;
     const baseURL = process.env.IXC_API_URL;
 
@@ -22,7 +21,6 @@ class IXCService {
     }
 
     // ✅ Implementação de Autenticação BASIC (exigido pelo IXC)
-    // O token é gerado a partir de "usuario:senha" ou o token puro, dependendo da configuração
     const tokenBase64 = Buffer.from(credentials).toString("base64");
     this.authHeader = `Basic ${tokenBase64}`;
 
@@ -81,11 +79,11 @@ class IXCService {
   // =========================================================
 
   /**
-   * 1. Busca um cliente pelo login (hotsite_login)
+   * 1. Busca um cliente pelo email (hotsite_email) [CORRIGIDO]
    */
   async findClienteByLogin(login) {
     const data = await this.list("cliente", {
-      qtype: "cliente.hotsite_login",
+      qtype: "cliente.hotsite_email", // Busca pelo e-mail
       query: login,
       oper: "=",
       limit: 1,
@@ -108,11 +106,12 @@ class IXCService {
     const senhaHashed = md5(senha);
 
     if (cliente.hotsite_senha === senhaHashed) {
-      // Retorna os dados essenciais do cliente para o token JWT
+      // Retorna os dados essenciais do cliente para o token JWT e a resposta
       return {
         id: cliente.id_cliente,
-        nome: cliente.razao,
+        nome: cliente.razao, // Nome completo (razao/nome) para o JWT
         email: cliente.email,
+        nome_razaosocial: cliente.razao, // Necessário para a resposta do login
         // Adicione outros campos necessários
       };
     }
@@ -316,10 +315,11 @@ class IXCService {
     const resultado = await this.post("get_boleto", payload);
 
     // Mock/Estrutura de dados esperada
-    if (resultado.pdf_base64) {
+    // CORREÇÃO: Usamos 'base64' para padronizar o retorno
+    if (resultado.base64) {
       return {
         success: true,
-        base64: resultado.pdf_base64,
+        base64: resultado.base64,
         mimeType: "application/pdf",
       };
     }

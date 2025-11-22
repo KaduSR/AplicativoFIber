@@ -6,7 +6,7 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const bodyParser = require("body-parser");
 
-// Serviços (GenieACSService foi removido)
+// Serviços (GenieACS e dependência removidos)
 
 // Middleware de Autenticação
 const { verifyToken } = require("./middleware/authMiddleware");
@@ -50,20 +50,17 @@ app.get("/health", (req, res) =>
 // 1. ROTAS PÚBLICAS (Acesso sem Token JWT)
 // =========================================================
 
-// Rotas de Autenticação e Status Externo NÃO PRECISAM de token.
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/status", instabilidadeRoutes);
 
 // =========================================================
-// 2. ROTAS PROTEGIDAS (Middleware aplicado individualmente)
+// 2. ROTAS PROTEGIDAS (Middleware aplicado)
 // =========================================================
 
-// Agora o middleware 'verifyToken' é aplicado explicitamente a cada rota que precisa de autenticação.
 app.use("/api/v1/dashboard", verifyToken, dashboardRoutes);
-// app.use("/api/v1/ont", verifyToken, ontRoutes); // REMOVIDO
 app.use("/api/v1/financeiro", verifyToken, financeiroRoutes);
 app.use("/api/v1/speedtest", verifyToken, speedtestRoute);
-app.use("/api/v1/chatbot", verifyToken, chatbotRoutes); // Adicionado o chatbot com a middleware correta
+app.use("/api/v1/chatbot", verifyToken, chatbotRoutes);
 
 app.listen(PORT, () => {
   console.log(`🚀 Backend rodando na porta ${PORT}`);

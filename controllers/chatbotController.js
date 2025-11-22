@@ -12,7 +12,7 @@ const ixcService = require("../services/ixc");
  * @route POST /api/v1/chatbot/processar
  */
 exports.processarIntencao = async (req, res) => {
-  const ixcId = req.user.id; // CORRIGIDO: de ixcId para id (padronizando com JWT)
+  const ixcId = req.user.id; // ID do cliente extraído pelo JWT
   const { message } = req.body;
 
   // Para fins de demonstração, assumimos que a 'Intenção' foi extraída.
@@ -25,10 +25,9 @@ exports.processarIntencao = async (req, res) => {
   }
 
   try {
-    // CORREÇÃO: Usamos getProtocols, o método existente que retorna dados de conexão
+    // Busca dados de conexão (Protocolos) para checagem básica
     const dadosConexao = await ixcService.getProtocols(ixcId);
 
-    // CORREÇÃO: Checamos a existência do login
     if (!dadosConexao || !dadosConexao.pppoe_login) {
       return res.json({
         reply:
@@ -59,7 +58,6 @@ exports.processarIntencao = async (req, res) => {
           100 // Exemplo: ID para Assunto 'Internet Instável'
         );
 
-        // CORREÇÃO: Checamos por .success e usamos .id_ticket, conforme retorno do IXCService
         if (ticketResult.success) {
           chatbotResponse.reply = `Chamado de suporte aberto com sucesso! Nosso protocolo é **${ticketResult.id_ticket}**. Um técnico entrará em contato em breve.`;
           chatbotResponse.acao = "CONFIRMACAO_CHAMADO";
@@ -95,7 +93,7 @@ exports.processarIntencao = async (req, res) => {
   }
 };
 
-// Função Simples para classificar a intenção
+// Função Simples para classificar a intenção (Em produção, usaria Gemini/Dialogflow)
 function classificarIntencao(message) {
   const msg = message.toLowerCase();
 
