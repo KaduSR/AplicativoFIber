@@ -1,21 +1,23 @@
-// routes/financeiro.js
 const express = require("express");
 const router = express.Router();
-const ixcService = require("../services/ixc");
-const authenticate = require("../middleware/authenticate");
-const financeiroController = require("../controllers/financeiroController"); // Importando o Controller
+const ixc = require("../services/ixc");
 
-// Protege TODAS as rotas deste arquivo com o JWT do cliente
-router.use(authenticate);
+router.get("/faturas", async (req, res) => {
+  try {
+    const faturas = await ixc.getFaturas(req.user.id);
+    res.json(faturas);
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao buscar faturas" });
+  }
+});
 
-// ===============================================
-// 1. MINHAS FATURAS (Listagem Completa)
-// ===============================================
-router.get("/minhas-faturas", financeiroController.getMinhasFaturas);
-
-// ===============================================
-// 2. BOLETO POR ID (Gera PDF Base64)
-// ===============================================
-router.get("/boleto/:id", financeiroController.getBoleto);
+router.get("/boleto/:id", async (req, res) => {
+  try {
+    const boleto = await ixc.getBoleto(req.params.id);
+    res.json(boleto);
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao gerar boleto" });
+  }
+});
 
 module.exports = router;
