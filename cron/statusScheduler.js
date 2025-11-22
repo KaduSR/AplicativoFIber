@@ -1,11 +1,12 @@
-// src/cron/statusScheduler.js (Exemplo de correção)
+// src/cron/statusScheduler.js (Exemplo de Correção)
 const cron = require("node-cron");
-let statusCheckJob = null; // Variável global para rastrear o job
+// Use uma variável global para rastrear o job
+let statusCheckJob = null;
 
 exports.startScheduler = () => {
-  // 💡 IMPORTANTE: Verifica se o job já existe e o interrompe
+  // 💡 SOLUÇÃO: Interrompe o agendador anterior se ele existir
   if (statusCheckJob) {
-    console.log("[CRON] Interrompendo job anterior...");
+    console.log("[CRON] Interrompendo job anterior (Evitando Memory Leak)...");
     statusCheckJob.stop();
   }
 
@@ -13,7 +14,7 @@ exports.startScheduler = () => {
 
   // Agendamento real do job
   statusCheckJob = cron.schedule("*/15 * * * *", async () => {
-    // ... lógica de verificação de status ...
+    // ... sua lógica de verificação de status ...
     console.log("[CRON] Executando checagem de status...");
   });
 
