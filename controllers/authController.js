@@ -2,7 +2,7 @@
 
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
-const ixc = require("../services/ixc");
+const ixc = require("../services/ixc"); // Importa a instância única do IXCService
 
 exports.login = async (req, res) => {
   const { login, senha } = req.body;
@@ -10,7 +10,9 @@ exports.login = async (req, res) => {
     return res.status(400).json({ message: "Login e senha obrigatórios" });
 
   try {
-    const cliente = await ixc.login(login, senha);
+    // CORREÇÃO: Chama o método 'authenticate' da instância ixc.
+    const cliente = await ixc.authenticate(login, senha);
+
     if (!cliente)
       return res.status(401).json({ message: "Credenciais inválidas" });
 
