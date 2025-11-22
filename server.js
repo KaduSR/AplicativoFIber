@@ -1,4 +1,5 @@
 // src/server.js
+
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -9,7 +10,8 @@ const bodyParser = require("body-parser");
 const GenieACSService = require("./services/genieacs");
 
 // Middleware de Autenticação
-const { verifyToken } = require("./middlewares/authMiddleware"); // <-- NOVO
+// 💡 CORREÇÃO: Assumindo que o arquivo está em './middlewares/authMiddleware.js'
+const { verifyToken } = require("./middlewares/authMiddleware");
 
 // Rotas
 const speedtestRoute = require("./routes/speedtest");
@@ -17,13 +19,19 @@ const instabilidadeRoutes = require("./routes/instabilidade");
 const ontRoutes = require("./routes/ont");
 const authRoutes = require("./routes/auth");
 const financeiroRoutes = require("./routes/financeiro");
-const dashboardRoutes = require("./routes/dashboard"); // <-- NOVO
+const dashboardRoutes = require("./routes/dashboard");
 
+// ❌ REMOVIDO: A importação do CRON foi removida para corrigir o Out Of Memory (OOM)
+// const { startScheduler } = require("./cron/statusScheduler");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000; // Define a porta padrão
 
-// Configuração e Injeção do GenieACS
+// =========================================================
+// CONFIGURAÇÃO
+// =========================================================
+
+// Inicialização e Injeção do GenieACS no Express (app.set)
 const genieacs = new GenieACSService(
   process.env.GENIEACS_URL,
   process.env.GENIEACS_USER,
@@ -37,32 +45,44 @@ app.use(cors({ origin: process.env.ALLOWED_ORIGINS.split(",") || "*" }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Configuração de Rate Limiting
 const limiter = rateLimit({
-  windowMs: process.env.RATE_LIMIT_WINDOW_MS || 900000,
-  max: process.env.RATE_LIMIT_MAX_REQUESTS || 100,
+  windowMs: process.env.RATE_LIMIT_WINDOW_MS || 900000, // 15 minutos
+  max: process.env.RATE_LIMIT_MAX_REQUESTS || 100, // 100 requisições por IP
 });
 app.use(limiter);
 
+// Rota de Health Check (Pública)
 app.get("/health", (req, res) =>
   res.json({ status: "online", uptime: process.uptime() })
 );
 
-// 1. ROTAS PÚBLICAS (Sem Token JWT)
+// =========================================================
+// 1. ROTAS PÚBLICAS (Acesso sem Token JWT)
+// =========================================================
+
+// Rotas de Autenticação e Status Externo NÃO PRECISAM de token.
 app.use("/api/v1/auth", authRoutes);
-
-// 2. MIDDLEWARE DE AUTENTICAÇÃO (PROTEGE TODAS AS ROTAS ABAIXO)
-app.use(verifyToken); // <-- APLICAÇÃO GLOBAL
-
-// 3. ROTAS PROTEGIDAS (Acesso exclusivo ao Cliente autenticado)
-app.use("/api/v1/dashboard", dashboardRoutes); // <-- NOVO
 app.use("/api/v1/status", instabilidadeRoutes);
-app.use("/api/v1/ont", ontRoutes);
-app.use("/api/v1/speedtest", speedtestRoute);
-app.use("/api/v1/financeiro", financeiroRoutes);
 
-app.use((req, res) => res.status(404).json({ error: "Rota não encontrada." }));
+// =========================================================
+// 2. MIDDLEWARE DE AUTENTICAÇÃO (Proteção de Rotas)
+// =========================================================
+
+// Aplica o middleware de autenticação a TODAS as rotas registradas ABAIXO.
+app.use(verifyToken);
+
+// =========================================================
+// 3. ROTAS PROTEGIDAS (Acesso exclusivo ao Cliente)
+// =========================================================
+app.use("/api/v1/dashboard", dashboardRoutes);
+app.use("/api/v1/ont", ontRoutes);
+app.use("/api/v1/financeiro", financeiroRoutes);
+app.use("/api/v1/speedtest", speedtestRoute);
+
+// ❌ REMOVIDO: A chamada do CRON foi removida
+// startScheduler();
 
 app.listen(PORT, () => {
   console.log(`🚀 Backend rodando na porta ${PORT}`);
-  // Inicia o scheduler após o servidor subir
 });
