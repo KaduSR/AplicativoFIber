@@ -6,9 +6,6 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const bodyParser = require("body-parser");
 
-// Serviços
-const GenieACSService = require("./services/genieacs");
-
 // Middleware de Autenticação
 // 💡 CORREÇÃO: Assumindo que o arquivo está em './middleware/authMiddleware.js'
 // Se o seu caminho for './middlewares/authMiddleware', mude a linha de volta.
@@ -17,7 +14,6 @@ const { verifyToken } = require("./middleware/authMiddleware");
 // Rotas
 const speedtestRoute = require("./routes/speedtest");
 const instabilidadeRoutes = require("./routes/instabilidade");
-const ontRoutes = require("./routes/ont");
 const authRoutes = require("./routes/auth");
 const financeiroRoutes = require("./routes/financeiro");
 const dashboardRoutes = require("./routes/dashboard");
@@ -32,14 +28,6 @@ const PORT = process.env.PORT || 10000; // Usando a porta 10000 vista no seu log
 // CONFIGURAÇÃO
 // =========================================================
 
-// Inicialização e Injeção do GenieACS no Express (app.set)
-const genieacs = new GenieACSService(
-  process.env.GENIEACS_URL,
-  process.env.GENIEACS_USER,
-  process.env.GENIEACS_PASSWORD
-);
-
-app.set("genieacs", genieacs);
 app.set("trust proxy", 1);
 
 app.use(cors({ origin: process.env.ALLOWED_ORIGINS.split(",") || "*" }));
@@ -77,7 +65,6 @@ app.use(verifyToken);
 // 3. ROTAS PROTEGIDAS (Acesso exclusivo ao Cliente)
 // =========================================================
 app.use("/api/v1/dashboard", dashboardRoutes);
-app.use("/api/v1/ont", ontRoutes);
 app.use("/api/v1/financeiro", financeiroRoutes);
 app.use("/api/v1/speedtest", speedtestRoute);
 
