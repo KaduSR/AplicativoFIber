@@ -13,7 +13,7 @@ const { verifyToken } = require("./middleware/authMiddleware");
 
 // Rotas
 const speedtestRoute = require("./routes/speedtest");
-const instabilidadeRoutes = require("./routes/instabilidade");
+const instabilidadeRoutes = require("./routes/monitoring");
 // const ontRoutes = require("./routes/ont"); // REMOVIDO
 const authRoutes = require("./routes/auth");
 const financeiroRoutes = require("./routes/financeiro");
