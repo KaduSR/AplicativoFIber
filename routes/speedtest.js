@@ -1,84 +1,137 @@
 // ============================================================
-// 4. ROTAS SPEEDTEST
+// ROTAS SPEEDTEST
+// src/routes/speedtest.js (SUBSTITUA COMPLETAMENTE)
 // ============================================================
-// src/routes/speedtest.js (ATUALIZADO)
 
 const express = require("express");
-const router = express.Router();
-const SpeedTestService = require("../services/SpeedTestService");
+const routerSpeed = express.Router();
+
+let SpeedTestService;
+let IXCService;
+
+try {
+  SpeedTestService = require("../services/SpeedTestService");
+  IXCService = require("../services/ixc");
+} catch (error) {
+  console.error("[SpeedTest Route] Erro ao carregar serviços:", error.message);
+}
 
 /**
  * POST /api/v1/speedtest/record
- * Registra novo resultado de speedtest
+ * Registra resultado do teste
  * Body: { downloadSpeed, uploadSpeed, ping, jitter, serverInfo, clientIp }
  */
-router.post("/record", async (req, res) => {
+routerSpeed.post("/record", async (req, res) => {
   try {
-    const clientId = req.user.id;
+    if (!SpeedTestService) {
+      return res.status(503).json({ error: "Serviço indisponível" });
+    }
+
+    const clientId = req.user?.id;
+    if (!clientId) {
+      return res.status(401).json({ error: "Cliente não autenticado" });
+    }
+
     const result = SpeedTestService.recordResult(clientId, req.body);
 
     res.json({
       success: true,
       result,
-      message: "Resultado de speedtest registrado com sucesso",
+      message: "Teste registrado com sucesso",
     });
   } catch (error) {
-    res.status(500).json({ error: "Erro ao registrar resultado" });
+    console.error("[SpeedTest] Erro:", error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
 /**
  * GET /api/v1/speedtest/history
- * Obtém histórico de testes do cliente
+ * Histórico de testes do cliente
  */
-router.get("/history", async (req, res) => {
+routerSpeed.get("/history", async (req, res) => {
   try {
-    const clientId = req.user.id;
-    const limit = parseInt(req.query.limit) || 30;
-    const history = SpeedTestService.getClientHistory(clientId, limit);
+    if (!SpeedTestService) {
+      return res.status(503).json({ error: "Serviço indisponível" });
+    }
 
-    res.json({ history, total: history.length });
+    const clientId = req.user?.id;
+    if (!clientId) {
+      return res.status(401).json({ error: "Cliente não autenticado" });
+    }
+
+    const limit = Math.min(parseInt(req.query.limit) || 30, 100);
+    const history = SpeedTestService.getHistory(clientId, limit);
+
+    res.json({ total: history.length, history });
   } catch (error) {
-    res.status(500).json({ error: "Erro ao buscar histórico" });
+    console.error("[SpeedTest] Erro:", error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
 /**
  * GET /api/v1/speedtest/stats
- * Obtém estatísticas do cliente
+ * Estatísticas do cliente
  */
-router.get("/stats", async (req, res) => {
+routerSpeed.get("/stats", async (req, res) => {
   try {
-    const clientId = req.user.id;
-    const stats = SpeedTestService.getClientStats(clientId);
+    if (!SpeedTestService) {
+      return res.status(503).json({ error: "Serviço indisponível" });
+    }
 
+    const clientId = req.user?.id;
+    if (!clientId) {
+      return res.status(401).json({ error: "Cliente não autenticado" });
+    }
+
+    const stats = SpeedTestService.getStats(clientId);
     res.json(stats);
   } catch (error) {
-    res.status(500).json({ error: "Erro ao calcular estatísticas" });
+    console.error("[SpeedTest] Erro:", error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
 /**
  * GET /api/v1/speedtest/compare
- * Compara com baseline do ISP
+ * Compara com plano contratado
  */
-router.get("/compare", async (req, res) => {
+routerSpeed.get("/compare", async (req, res) => {
   try {
-    const clientId = req.user.id;
-    // Buscar baseline do ISP do contrato do cliente
-    const ispBaseline = {
-      download: 100, // Mbps (exemplo)
-      upload: 50, // Mbps (exemplo)
-    };
+    if (!SpeedTestService || !IXCService) {
+      return res.status(503).json({ error: "Serviço indisponível" });
+    }
 
-    const comparison = SpeedTestService.compareWithISPBaseline(
+    const clientId = req.user?.id;
+    if (!clientId) {
+      return res.status(401).json({ error: "Cliente não autenticado" });
+    }
+
+    // Busca plano do IXC
+    const contrato = await IXCService.getContractDetails(clientId);
+
+    if (!contrato) {
+      return res.status(400).json({ error: "Plano não encontrado" });
+    }
+
+    // Parse velocidade (ex: "100 Mbps" -> 100)
+    const planSpeed = parseInt(contrato.plan_speed);
+    if (isNaN(planSpeed)) {
+      return res.status(400).json({ error: "Velocidade do plano inválida" });
+    }
+
+    const comparison = SpeedTestService.compareWithPlan(
       clientId,
-      ispBaseline
+      planSpeed,
+      Math.round(planSpeed / 2)
     );
+
     res.json(comparison);
   } catch (error) {
-    res.status(500).json({ error: "Erro ao comparar com baseline" });
+    console.error("[SpeedTest] Erro:", error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
-module.exports = router;
+module.exports = routerSpeed;

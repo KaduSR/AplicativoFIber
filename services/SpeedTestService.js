@@ -1,181 +1,176 @@
 // ============================================================
-// 2. SERVIÇO DE SPEEDTEST ROBUSTO (OOKLA)
-// ============================================================
+// SERVIÇO SPEEDTEST FIBERNET (CORRIGIDO)
 // src/services/SpeedTestService.js
+// ============================================================
 
 const fs = require("fs");
 const path = require("path");
+const NodeCacheModule = require("node-cache");
 
 class SpeedTestService {
   constructor() {
-    this.cache = new NodeCache({ stdTTL: 3600 }); // Cache de 1 hora
-    this.resultsFile = path.join(__dirname, "speedtest_results.json");
-    this.loadResults();
+    this.resultsDir = path.join(__dirname, "../data/speedtest_results");
+    this.ensureDir();
+    this.cache = new NodeCacheModule({ stdTTL: 1800 });
   }
 
-  /**
-   * Carrega histórico de resultados do arquivo
-   */
-  loadResults() {
-    try {
-      if (fs.existsSync(this.resultsFile)) {
-        const data = fs.readFileSync(this.resultsFile, "utf8");
-        this.allResults = JSON.parse(data);
-      } else {
-        this.allResults = [];
-      }
-    } catch (error) {
-      console.warn("[SpeedTest] Erro ao carregar resultados:", error.message);
-      this.allResults = [];
+  ensureDir() {
+    if (!fs.existsSync(this.resultsDir)) {
+      fs.mkdirSync(this.resultsDir, { recursive: true });
     }
   }
 
-  /**
-   * Salva resultados no arquivo
-   */
-  saveResults() {
-    try {
-      fs.writeFileSync(
-        this.resultsFile,
-        JSON.stringify(this.allResults, null, 2)
-      );
-    } catch (error) {
-      console.error("[SpeedTest] Erro ao salvar resultados:", error.message);
-    }
-  }
-
-  /**
-   * Registra novo resultado de speedtest
-   */
   recordResult(clientId, testData) {
-    const result = {
-      id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      clientId,
-      timestamp: new Date().toISOString(),
-      download: {
-        speed: parseFloat(testData.downloadSpeed) || 0,
-        unit: "Mbps",
-      },
-      upload: {
-        speed: parseFloat(testData.uploadSpeed) || 0,
-        unit: "Mbps",
-      },
-      ping: {
-        latency: parseFloat(testData.ping) || 0,
-        jitter: parseFloat(testData.jitter) || 0,
-        unit: "ms",
-      },
-      serverInfo: testData.serverInfo || "Unknown",
-      userAgent: testData.userAgent,
-      ip: testData.clientIp,
-    };
+    try {
+      const result = {
+        id: `test_${Date.now()}`,
+        clientId,
+        timestamp: new Date().toISOString(),
+        download:
+          Math.round(parseFloat(testData.downloadSpeed) * 100) / 100 || 0,
+        upload: Math.round(parseFloat(testData.uploadSpeed) * 100) / 100 || 0,
+        ping: Math.round(parseFloat(testData.ping) * 100) / 100 || 0,
+        jitter: Math.round(parseFloat(testData.jitter) * 100) / 100 || 0,
+        serverInfo: testData.serverInfo || "LibreSpeed",
+        ip: testData.clientIp || "unknown",
+      };
 
-    this.allResults.push(result);
-    this.saveResults();
+      const filePath = path.join(this.resultsDir, `${clientId}.json`);
+      let results = [];
 
-    return result;
+      if (fs.existsSync(filePath)) {
+        results = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      }
+
+      results.push(result);
+      results = results.slice(-1000);
+
+      fs.writeFileSync(filePath, JSON.stringify(results, null, 2));
+      this.cache.del(`stats_${clientId}`);
+
+      return result;
+    } catch (error) {
+      console.error("[SpeedTest] Erro:", error.message);
+      throw error;
+    }
   }
 
-  /**
-   * Obtém histórico de testes do cliente
-   */
-  getClientHistory(clientId, limit = 30) {
-    return this.allResults
-      .filter((r) => r.clientId === clientId)
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-      .slice(0, limit);
+  getHistory(clientId, limit = 50) {
+    try {
+      const filePath = path.join(this.resultsDir, `${clientId}.json`);
+
+      if (!fs.existsSync(filePath)) return [];
+
+      const results = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      return results
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .slice(0, limit);
+    } catch (error) {
+      console.error("[SpeedTest] Erro ao ler histórico:", error.message);
+      return [];
+    }
   }
 
-  /**
-   * Calcula estatísticas do cliente
-   */
-  getClientStats(clientId) {
-    const results = this.allResults.filter((r) => r.clientId === clientId);
+  getStats(clientId) {
+    const cacheKey = `stats_${clientId}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached) return cached;
 
-    if (results.length === 0) {
+    const history = this.getHistory(clientId, 100);
+
+    if (history.length === 0) {
       return {
         totalTests: 0,
-        average: { download: 0, upload: 0, ping: 0 },
+        lastTest: null,
+        average: { download: 0, upload: 0, ping: 0, jitter: 0 },
         min: { download: 0, upload: 0, ping: 0 },
         max: { download: 0, upload: 0, ping: 0 },
+        trend: "no_data",
       };
     }
 
-    const downloads = results.map((r) => r.download.speed);
-    const uploads = results.map((r) => r.upload.speed);
-    const pings = results.map((r) => r.ping.latency);
-
-    const avg = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+    const avg = (arr) =>
+      Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100;
     const min = (arr) => Math.min(...arr);
     const max = (arr) => Math.max(...arr);
 
-    return {
-      totalTests: results.length,
-      lastTest: results[0].timestamp,
+    const downloads = history.map((r) => r.download);
+    const uploads = history.map((r) => r.upload);
+    const pings = history.map((r) => r.ping);
+    const jitters = history.map((r) => r.jitter);
+
+    const recent = history.slice(0, 5);
+    const older = history.slice(10, 15);
+    const recentAvg = avg(recent.map((r) => r.download));
+    const olderAvg =
+      older.length > 0 ? avg(older.map((r) => r.download)) : recentAvg;
+    const trend =
+      recentAvg > olderAvg * 1.1
+        ? "improving"
+        : recentAvg < olderAvg * 0.9
+        ? "declining"
+        : "stable";
+
+    const stats = {
+      totalTests: history.length,
+      lastTest: history[0]?.timestamp || null,
       average: {
-        download: avg(downloads).toFixed(2),
-        upload: avg(uploads).toFixed(2),
-        ping: avg(pings).toFixed(2),
+        download: avg(downloads),
+        upload: avg(uploads),
+        ping: avg(pings),
+        jitter: avg(jitters),
       },
       min: {
-        download: min(downloads).toFixed(2),
-        upload: min(uploads).toFixed(2),
-        ping: min(pings).toFixed(2),
+        download: min(downloads),
+        upload: min(uploads),
+        ping: min(pings),
       },
       max: {
-        download: max(downloads).toFixed(2),
-        upload: max(uploads).toFixed(2),
-        ping: max(pings).toFixed(2),
+        download: max(downloads),
+        upload: max(uploads),
+        ping: max(pings),
       },
+      trend,
     };
+
+    this.cache.set(cacheKey, stats);
+    return stats;
   }
 
-  /**
-   * Compara com baseline do ISP
-   */
-  compareWithISPBaseline(clientId, ispBaseline) {
-    const stats = this.getClientStats(clientId);
+  compareWithPlan(clientId, planDownload, planUpload) {
+    const stats = this.getStats(clientId);
 
     if (stats.totalTests === 0) {
-      return { analysis: "Nenhum teste realizado", status: "unknown" };
+      return {
+        status: "no_data",
+        message: "Nenhum teste realizado ainda",
+      };
     }
 
-    const downloadStatus =
-      stats.average.download >= ispBaseline.download * 0.8 ? "good" : "poor";
-    const uploadStatus =
-      stats.average.upload >= ispBaseline.upload * 0.8 ? "good" : "poor";
-    const pingStatus = stats.average.ping <= 50 ? "good" : "poor";
+    const dlPct = Math.round((stats.average.download / planDownload) * 100);
+    const ulPct = Math.round((stats.average.upload / planUpload) * 100);
+
+    const dlOk = dlPct >= 80;
+    const ulOk = ulPct >= 80;
 
     return {
-      status: [downloadStatus, uploadStatus, pingStatus].every(
-        (s) => s === "good"
-      )
-        ? "excellent"
-        : "needs_improvement",
-      analysis: {
-        download: {
-          expected: ispBaseline.download,
-          actual: stats.average.download,
-          percentage: (
-            (stats.average.download / ispBaseline.download) *
-            100
-          ).toFixed(2),
-          status: downloadStatus,
-        },
-        upload: {
-          expected: ispBaseline.upload,
-          actual: stats.average.upload,
-          percentage: (
-            (stats.average.upload / ispBaseline.upload) *
-            100
-          ).toFixed(2),
-          status: uploadStatus,
-        },
-        ping: {
-          value: stats.average.ping,
-          status: pingStatus,
-        },
+      status: dlOk && ulOk ? "good" : "poor",
+      download: {
+        contracted: planDownload,
+        measured: stats.average.download,
+        percentage: dlPct,
+        ok: dlOk,
       },
+      upload: {
+        contracted: planUpload,
+        measured: stats.average.upload,
+        percentage: ulPct,
+        ok: ulOk,
+      },
+      recommendation:
+        dlOk && ulOk
+          ? "✅ Sua conexão está excelente!"
+          : "⚠️ Abra um chamado de suporte",
     };
   }
 }

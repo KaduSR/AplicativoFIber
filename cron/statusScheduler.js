@@ -1,47 +1,78 @@
-// src/cron/statusScheduler.js
+// ============================================================
+// SCHEDULER MONITORAMENTO
+// src/cron/instabilidadeScheduler.js (SUBSTITUA COMPLETAMENTE)
+// ============================================================
 
 const cron = require("node-cron");
-const ixc = require("../services/ixc");
-// A classe do GenieACS não deve ser importada aqui para evitar dependência circular
-// (ela deve ser acessada via app.get('genieacs') se necessário).
+const axios = require("axios");
 
-// Variável global para rastrear o job CRON ativo
+let MonitoringServiceScheduler;
+try {
+  MonitoringServiceScheduler = require("../services/MonitoringService");
+} catch (error) {
+  console.error(
+    "[Scheduler] Erro ao carregar MonitoringService:",
+    error.message
+  );
+}
+
 let statusCheckJob = null;
 
-/**
- * @desc Inicia o agendador de status de serviços.
- * A cada 15 minutos, ele pode ser usado para checar a saúde do IXC ou
- * o status de instabilidade global.
- */
-exports.startScheduler = () => {
-  // IMPORTANTE: Interrompe o job anterior se ele existir (CORREÇÃO DE MEMORY LEAK)
+function startScheduler(interval = "*/5 * * * *") {
   if (statusCheckJob) {
-    console.log("[CRON] Interrompendo job anterior (Evitando Memory Leak)...");
-    statusCheckJob.stop();
+    console.log("[Scheduler] Já está rodando");
+    return;
   }
 
-  console.log(
-    `[CRON] Iniciando verificação automática de status (${new Date().toISOString()})...`
-  );
+  if (!MonitoringServiceScheduler) {
+    console.error("[Scheduler] MonitoringService não carregado");
+    return;
+  }
 
-  // Define o novo job CRON para rodar a cada 15 minutos ('*/15 * * * *')
-  statusCheckJob = cron.schedule("*/15 * * * *", async () => {
+  console.log(`[Scheduler] Iniciando monitoramento a cada: ${interval}`);
+
+  statusCheckJob = cron.schedule(interval, async () => {
     try {
-      // Exemplo de lógica CRON: Checar a saúde do IXC
-      // const health = await ixc.checkHealth();
-      // console.log(`[CRON] IXC Health Check: ${health.status}`);
+      const result =
+        await MonitoringServiceScheduler.extractProblematicServices();
 
-      // Adicione aqui qualquer lógica de monitoramento periódico
-      console.log(`[CRON] Executando checagem de status de serviços...`);
-    } catch (error) {
-      console.error(
-        "[CRON ERROR] Falha na execução do agendador:",
-        error.message
+      console.log(
+        `[Scheduler] ✅ Verificado: ${result.critical} críticos, ${result.warning} warnings`
       );
+
+      // Envia alerta se houver críticos
+      if (result.critical > 0 && process.env.ALERT_WEBHOOK_URL) {
+        try {
+          await axios.post(process.env.ALERT_WEBHOOK_URL, {
+            type: "instability_alert",
+            timestamp: result.timestamp,
+            critical: result.critical,
+            warning: result.warning,
+            services: result.topCritical.slice(0, 5),
+            statusMessage: result.summary.statusMessage,
+          });
+          console.log("[Scheduler] ✅ Alerta enviado");
+        } catch (e) {
+          console.warn("[Webhook] Erro:", e.message);
+        }
+      }
+    } catch (error) {
+      console.error("[Scheduler] Erro:", error.message);
     }
   });
 
-  console.log(
-    "[CRON] Agendador de status de serviços iniciado (a cada 15 minutos)."
-  );
+  console.log("[Scheduler] ✅ Iniciado com sucesso");
+}
+
+function stopScheduler() {
+  if (statusCheckJob) {
+    statusCheckJob.stop();
+    statusCheckJob = null;
+    console.log("[Scheduler] ⏹️ Parado");
+  }
+}
+
+module.exports = {
+  startScheduler,
+  stopScheduler,
 };
