@@ -60,7 +60,7 @@ app.use("/api/v1/status", instabilidadeRoutes);
 app.use("/api/v1/dashboard", verifyToken, dashboardRoutes);
 app.use("/api/v1/financeiro", verifyToken, financeiroRoutes);
 app.use("/api/v1/speedtest", verifyToken, speedtestRoute);
-app.use("/api/v1/chatbot", verifyToken, chatbotRoutes);
+app.use("/api/v1/chatbot", verifyToken, chatbotRoutes); // Proteção da rota do chatbot
 
 app.listen(PORT, () => {
   console.log(`🚀 Backend rodando na porta ${PORT}`);

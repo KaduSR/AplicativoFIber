@@ -43,7 +43,7 @@ exports.processarIntencao = async (req, res) => {
 
     switch (intencao) {
       case "DIAGNOSTICO_INTERNET":
-        // Ação de diagnóstico removida com o GenieACS.
+        // Fallback após remoção do GenieACS.
         chatbotResponse.reply =
           "Entendi que sua internet está com problemas. O diagnóstico automatizado (via ONT) está temporariamente indisponível. Para resolver rapidamente, por favor, abra um chamado para um diagnóstico humano.";
         chatbotResponse.acao = "SUGERIR_CHAMADO";
@@ -69,7 +69,7 @@ exports.processarIntencao = async (req, res) => {
         break;
 
       case "REINICIAR_ONT":
-        // Ação de reboot removida com o GenieACS.
+        // Fallback após remoção do GenieACS.
         chatbotResponse.reply =
           "A função de reinicialização remota (REBOOT) está em manutenção. Por favor, tente reiniciar seu equipamento manualmente (tirando da tomada por 10 segundos).";
         chatbotResponse.acao = "REBOOT_INDISPONIVEL";

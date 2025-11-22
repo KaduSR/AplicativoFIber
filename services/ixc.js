@@ -68,7 +68,7 @@ class IXCService {
     }
   }  // ========================================================= // 🔑 AUTENTICAÇÃO // =========================================================
   /**
-   * 1. Busca um cliente pelo email (hotsite_email) [CORRIGIDO]
+   * 1. Busca um cliente pelo email (hotsite_email)
    */
 
   async findClienteByLogin(login) {

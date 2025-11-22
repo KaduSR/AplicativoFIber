@@ -6,7 +6,7 @@ const ixcService = require("../services/ixc");
  * @route GET /api/v1/faturas/minhas-faturas
  */
 exports.getMinhasFaturas = async (req, res) => {
-  // CORRIGIDO: Usamos req.user.id (do JWT payload)
+  // Padronizado para req.user.id
   const clienteId = req.user.id;
 
   try {
@@ -43,10 +43,10 @@ exports.getBoleto = async (req, res) => {
 
   try {
     // Chama o serviço para gerar o boleto (que retorna o PDF em base64)
-    const boletoData = await ixcService.getBoleto(boletoId); // O IXC gera o boleto via post
+    const boletoData = await ixcService.getBoleto(boletoId);
 
     if (boletoData && boletoData.base64) {
-      // Supondo que o frontend sabe como lidar com a string base64 para abrir o PDF
+      // Retorna a base64
       return res.json({
         id: boletoId,
         base64: boletoData.base64,

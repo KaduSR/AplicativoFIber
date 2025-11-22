@@ -25,14 +25,14 @@ exports.login = async (req, res) => {
     // nome: cliente.nome_razaosocial é usado na resposta para o cliente
     res.json({ token, nome: cliente.nome_razaosocial, email: cliente.email });
   } catch (error) {
-    // 💡 NOVO LOG: Forçamos a impressão do erro completo, incluindo o stack trace.
+    // LOG DETALHADO
     console.error(
       "========================================",
       "!!! ERRO CRÍTICO 500 NO LOGIN !!!",
       "MENSAGEM:",
-      error.message, // Erro de alto nível (ex: Network Error)
+      error.message,
       "STACK TRACE:",
-      error.stack, // Onde o erro realmente ocorreu
+      error.stack,
       "========================================"
     );
     res.status(500).json({ message: "Erro interno" });
