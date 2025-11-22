@@ -6,8 +6,7 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const bodyParser = require("body-parser");
 
-// Serviços
-// O GenieACSService foi removido e não está sendo mais importado.
+// Serviços (GenieACSService foi removido)
 
 // Middleware de Autenticação
 const { verifyToken } = require("./middleware/authMiddleware");
@@ -15,10 +14,11 @@ const { verifyToken } = require("./middleware/authMiddleware");
 // Rotas
 const speedtestRoute = require("./routes/speedtest");
 const instabilidadeRoutes = require("./routes/instabilidade");
-// const ontRoutes = require("./routes/ont"); // Rota removida
+// const ontRoutes = require("./routes/ont"); // REMOVIDO
 const authRoutes = require("./routes/auth");
 const financeiroRoutes = require("./routes/financeiro");
 const dashboardRoutes = require("./routes/dashboard");
+const chatbotRoutes = require("./routes/chatbot"); // Adicionado rota do chatbot
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -27,7 +27,7 @@ const PORT = process.env.PORT || 10000;
 // CONFIGURAÇÃO
 // =========================================================
 
-// A inicialização e injeção do GenieACS foram removidas.
+// Configuração GenieACS removida
 app.set("trust proxy", 1);
 
 app.use(cors({ origin: process.env.ALLOWED_ORIGINS.split(",") || "*" }));
@@ -51,7 +51,6 @@ app.get("/health", (req, res) =>
 // =========================================================
 
 // Rotas de Autenticação e Status Externo NÃO PRECISAM de token.
-// Estas rotas não têm o middleware 'verifyToken' aplicado.
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/status", instabilidadeRoutes);
 
@@ -61,9 +60,10 @@ app.use("/api/v1/status", instabilidadeRoutes);
 
 // Agora o middleware 'verifyToken' é aplicado explicitamente a cada rota que precisa de autenticação.
 app.use("/api/v1/dashboard", verifyToken, dashboardRoutes);
-// A rota da ONT foi removida.
+// app.use("/api/v1/ont", verifyToken, ontRoutes); // REMOVIDO
 app.use("/api/v1/financeiro", verifyToken, financeiroRoutes);
 app.use("/api/v1/speedtest", verifyToken, speedtestRoute);
+app.use("/api/v1/chatbot", verifyToken, chatbotRoutes); // Adicionado o chatbot com a middleware correta
 
 app.listen(PORT, () => {
   console.log(`🚀 Backend rodando na porta ${PORT}`);

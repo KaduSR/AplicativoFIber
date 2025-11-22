@@ -3,7 +3,7 @@ const ixcService = require("../services/ixc");
 
 /**
  * @typedef {object} ChatbotRequest
- * @property {string} ixcId ID do cliente IXC (do JWT).
+ * @property {string} id ID do cliente IXC (do JWT).
  * @property {string} message Mensagem do usuário (Intenção).
  */
 
@@ -12,11 +12,10 @@ const ixcService = require("../services/ixc");
  * @route POST /api/v1/chatbot/processar
  */
 exports.processarIntencao = async (req, res) => {
-  const ixcId = req.user.id; // Alterado de ixcId para id (do payload JWT)
+  const ixcId = req.user.id; // CORRIGIDO: de ixcId para id (padronizando com JWT)
   const { message } = req.body;
 
   // Para fins de demonstração, assumimos que a 'Intenção' foi extraída.
-  // Em uma aplicação real, a IA do Gemini ou um NLU faria essa classificação.
   const intencao = classificarIntencao(message);
 
   if (!ixcId) {
@@ -29,7 +28,7 @@ exports.processarIntencao = async (req, res) => {
     // CORREÇÃO: Usamos getProtocols, o método existente que retorna dados de conexão
     const dadosConexao = await ixcService.getProtocols(ixcId);
 
-    // CORREÇÃO: Checamos a existência do login, que é um campo essencial retornado por getProtocols
+    // CORREÇÃO: Checamos a existência do login
     if (!dadosConexao || !dadosConexao.pppoe_login) {
       return res.json({
         reply:
@@ -45,7 +44,7 @@ exports.processarIntencao = async (req, res) => {
 
     switch (intencao) {
       case "DIAGNOSTICO_INTERNET":
-        // Ação de diagnóstico foi removida junto com o GenieACS.
+        // Ação de diagnóstico removida com o GenieACS.
         chatbotResponse.reply =
           "Entendi que sua internet está com problemas. O diagnóstico automatizado (via ONT) está temporariamente indisponível. Para resolver rapidamente, por favor, abra um chamado para um diagnóstico humano.";
         chatbotResponse.acao = "SUGERIR_CHAMADO";
@@ -60,7 +59,7 @@ exports.processarIntencao = async (req, res) => {
           100 // Exemplo: ID para Assunto 'Internet Instável'
         );
 
-        // CORREÇÃO: Checamos por .success e usamos .id_ticket
+        // CORREÇÃO: Checamos por .success e usamos .id_ticket, conforme retorno do IXCService
         if (ticketResult.success) {
           chatbotResponse.reply = `Chamado de suporte aberto com sucesso! Nosso protocolo é **${ticketResult.id_ticket}**. Um técnico entrará em contato em breve.`;
           chatbotResponse.acao = "CONFIRMACAO_CHAMADO";
@@ -72,7 +71,7 @@ exports.processarIntencao = async (req, res) => {
         break;
 
       case "REINICIAR_ONT":
-        // Ação de reboot foi removida junto com o GenieACS.
+        // Ação de reboot removida com o GenieACS.
         chatbotResponse.reply =
           "A função de reinicialização remota (REBOOT) está em manutenção. Por favor, tente reiniciar seu equipamento manualmente (tirando da tomada por 10 segundos).";
         chatbotResponse.acao = "REBOOT_INDISPONIVEL";
@@ -96,7 +95,7 @@ exports.processarIntencao = async (req, res) => {
   }
 };
 
-// Função Simples para classificar a intenção (Em produção, usaria Gemini/Dialogflow)
+// Função Simples para classificar a intenção
 function classificarIntencao(message) {
   const msg = message.toLowerCase();
 
