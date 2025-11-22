@@ -33,7 +33,8 @@ app.get("/health", (req, res) =>
 );
 
 app.use("/api/v1/status", instabilidadeRoutes);
-app.use("/api/v1/ont", ontRoutes);
+app.use("/api/v1/faturas", authenticate, faturasRoutes);
+app.use("/api/v1/ont", authenticate, ontRoutes);
 app.use("/api/v1/speedtest", speedtestRoute); // <-- Montagem Corrigida
 app.use("/api/v1/auth", authRoutes);
 
