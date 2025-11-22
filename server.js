@@ -10,8 +10,9 @@ const bodyParser = require("body-parser");
 const GenieACSService = require("./services/genieacs");
 
 // Middleware de Autenticação
-// 💡 CORREÇÃO: Assumindo que o arquivo está em './middlewares/authMiddleware.js'
-const { verifyToken } = require("./middlewares/authMiddleware");
+// 💡 CORREÇÃO: Assumindo que o arquivo está em './middleware/authMiddleware.js'
+// Se o seu caminho for './middlewares/authMiddleware', mude a linha de volta.
+const { verifyToken } = require("./middleware/authMiddleware");
 
 // Rotas
 const speedtestRoute = require("./routes/speedtest");
@@ -21,11 +22,11 @@ const authRoutes = require("./routes/auth");
 const financeiroRoutes = require("./routes/financeiro");
 const dashboardRoutes = require("./routes/dashboard");
 
-// ❌ REMOVIDO: A importação do CRON foi removida para corrigir o Out Of Memory (OOM)
+// ❌ REMOVIDO: A importação do CRON foi removida
 // const { startScheduler } = require("./cron/statusScheduler");
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Define a porta padrão
+const PORT = process.env.PORT || 10000; // Usando a porta 10000 vista no seu log
 
 // =========================================================
 // CONFIGURAÇÃO
