@@ -28,12 +28,12 @@ class SpeedtestService {
       technology: "http",
     },
   };
-
   /**
    * @description Executa o teste completo (ping, download e upload) usando o Ookla.
    * @param {object} options Opções para o teste de velocidade.
    * @returns {Promise<OAResult>} Resultados do teste de velocidade.
    */
+
   async runSpeedtest(options = {}) {
     // Usa as opções padrão e sobrescreve com as opções fornecidas
     const mergedOptions = {
@@ -45,9 +45,8 @@ class SpeedtestService {
       const test = new UniversalSpeedTest(mergedOptions);
 
       console.log("Iniciando Speedtest...");
-      const result = await test.performOoklaTest(); //
+      const result = await test.performOoklaTest(); // // Formata o resultado para a resposta (opcional, mas recomendado)
 
-      // Formata o resultado para a resposta (opcional, mas recomendado)
       return {
         client: result.client,
         ping: `${result.pingResult.latency}ms / Jitter: ${result.pingResult.jitter}ms`,
@@ -61,12 +60,12 @@ class SpeedtestService {
       throw new Error("Não foi possível completar o teste de velocidade.");
     }
   }
-
   /**
    * @description Lista os servidores do Ookla disponíveis.
    * @param {number} serversToFetch Número de servidores para buscar.
    * @returns {Promise<OAServer[]>} Lista de servidores.
    */
+
   async listServers(serversToFetch) {
     const test = new UniversalSpeedTest(SpeedtestService.DEFAULT_OPTIONS);
     return test.listOoklaServers(serversToFetch); //

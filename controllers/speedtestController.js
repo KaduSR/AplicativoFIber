@@ -13,12 +13,10 @@ exports.run = async (req, res) => {
         downloadUnit: SpeedUnits.Mbps,
         uploadUnit: SpeedUnits.Mbps,
       },
-    });
+    }); // Executa o teste completo
 
-    // Executa o teste completo
-    const results = await speedtest.performOoklaTest();
+    const results = await speedtest.performOoklaTest(); // Retorna os resultados chaves
 
-    // Retorna os resultados chaves
     return res.json({
       ping: results.pingResult.latency,
       jitter: results.pingResult.jitter,
@@ -27,8 +25,7 @@ exports.run = async (req, res) => {
       clientIp: results.client.ip,
     });
   } catch (error) {
-    console.error("Erro no Speedtest:", error);
-    // Falha no teste de velocidade retorna um erro 500
+    console.error("Erro no Speedtest:", error); // Falha no teste de velocidade retorna um erro 500
     return res
       .status(500)
       .json({ message: "Falha ao executar teste de velocidade" });

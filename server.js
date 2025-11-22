@@ -31,13 +31,9 @@ app.get("/health", (req, res) =>
   res.json({ status: "online", uptime: process.uptime() })
 );
 
-// --- CORREÇÃO APLICADA AQUI ---
-// Agora, todas as rotas são acessadas via /api/v1/
 app.use("/api/v1/status", instabilidadeRoutes);
 app.use("/api/v1/ont", ontRoutes);
-app.use("/api/v1/speedtest", speedtestRoute);
-
-// ROTA DE AUTENTICAÇÃO IXC
+app.use("/api/v1/speedtest", speedtestRoute); // <-- Montagem Corrigida
 app.use("/api/v1/auth", authRoutes);
 
 app.use((req, res) => res.status(404).json({ error: "Rota não encontrada." }));
