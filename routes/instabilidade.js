@@ -178,7 +178,4 @@ router.get("/", async (req, res) => {
   }
 });
 
-module.exports = {
-  router,
-  SERVICES_TO_CHECK,
-};
+module.exports = router;
