@@ -1,22 +1,20 @@
-// routes/dashboard.js
+// src/routes/dashboard.js
 const express = require("express");
 const router = express.Router();
-// O middleware authenticate não é mais necessário aqui, pois verifyToken
-// já está aplicado globalmente em server.js.
+
+// IMPORTA O CONTROLLER CORRETO
 const dashboardController = require("../controllers/dashboardController");
 
-// Rotas Dashboard protegidas pelo middleware verifyToken (aplicado em server.js)
-
-/**
- * @route GET /api/v1/dashboard/dados
- * @desc Busca todos os dados do cliente para a tela principal (Dashboard).
- */
+// ROTA PROTEGIDA - DADOS DO DASHBOARD
 router.get("/dados", dashboardController.getDashboardData);
 
-/**
- * @route POST /api/v1/dashboard/desbloqueio
- * @desc Solicita o Desbloqueio de Confiança do cliente.
- */
-router.post("/desbloqueio", dashboardController.performUnlock);
+// ROTA PARA DESBLOQUEIO DE CONFIANÇA (se tiver)
+router.post(
+  "/desbloqueio",
+  dashboardController.performUnlock ||
+    ((req, res) => {
+      res.status(501).json({ error: "Funcionalidade em desenvolvimento" });
+    })
+);
 
 module.exports = router;
