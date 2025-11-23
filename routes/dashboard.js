@@ -1,20 +1,12 @@
 // src/routes/dashboard.js
 const express = require("express");
 const router = express.Router();
-
-// IMPORTA O CONTROLLER CORRETO
 const dashboardController = require("../controllers/dashboardController");
 
-// ROTA PROTEGIDA - DADOS DO DASHBOARD
+// Dados do dashboard
 router.get("/dados", dashboardController.getDashboardData);
 
-// ROTA PARA DESBLOQUEIO DE CONFIANÇA (se tiver)
-router.post(
-  "/desbloqueio",
-  dashboardController.performUnlock ||
-    ((req, res) => {
-      res.status(501).json({ error: "Funcionalidade em desenvolvimento" });
-    })
-);
+// NOVA ROTA: Trocar senha
+router.post("/trocar-senha", dashboardController.trocarSenha);
 
 module.exports = router;
