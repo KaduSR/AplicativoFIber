@@ -1,64 +1,114 @@
 // src/controllers/dashboardController.js
 const IXCService = require("../services/ixc");
 const jwt = require("jsonwebtoken");
+const md5 = require("md5");
 
 exports.getDashboardData = async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) {
-      return res.status(401).json({ error: "Token não fornecido" });
-    }
+    if (!token) return res.status(401).json({ error: "Token ausente" });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "fibernet2025");
     const clienteId = decoded.id;
 
-    // Busca TODOS os dados em paralelo (rápido!)
-    const [consumo, contrato, faturas, desbloqueio, protocolos] =
-      await Promise.all([
-        IXCService.getConsumption(clienteId),
-        IXCService.getContractDetails(clienteId),
-        IXCService.getFaturas(clienteId),
-        IXCService.getConfidenceUnlockStatus(clienteId),
-        IXCService.getProtocols(clienteId),
-      ]);
+    // Busca todos os dados em paralelo
+    const [clienteRaw, contrato, consumo, faturas] = await Promise.all([
+      IXCService.list("cliente", {
+        qtype: "cliente.id",
+        query: clienteId,
+        oper: "=",
+        limit: 1,
+      }),
+      IXCService.getContractDetails(clienteId),
+      IXCService.getConsumption(clienteId),
+      IXCService.getFaturas(clienteId),
+    ]);
 
-    // Monta resposta final
+    const cliente = clienteRaw.registros?.[0] || {};
+
     res.json({
       cliente: {
-        id: clienteId,
-        nome: decoded.nome || "Cliente",
-        email: decoded.email,
+        nome: cliente.razao || "Cliente",
+        email: cliente.hotsite_email || decoded.email,
+        cpf_cnpj: cliente.cnpj_cpf || "Não informado",
       },
       plano: {
-        velocidade: contrato.plan_speed || "Indisponível",
-        status: contrato.status || "Ativo",
-        endereco: contrato.address || "Não informado",
+        velocidade: contrato.plan_speed || "Não informado",
+        status: contrato.status || "Desconhecido",
+        endereco:
+          cliente.endereco_instalacao || cliente.endereco || "Não informado",
       },
       consumo: {
-        download: consumo.download,
-        upload: consumo.upload,
+        download: consumo.download || "0 GB",
+        upload: consumo.upload || "0 GB",
       },
-      faturas: faturas.slice(0, 5), // últimas 5
-      desbloqueio: {
-        elegivel: desbloqueio.is_eligible,
-        bloqueado: desbloqueio.is_blocked,
-        podeDesbloquearAte: desbloqueio.can_unlock_until,
-        mensagem: desbloqueio.message,
-      },
-      protocolo: {
-        login: protocolos?.pppoe_login || "não_encontrado",
-        senha: "***********",
-        tipo: protocolos?.protocol_type || "PPPoE",
-      },
+      faturas:
+        faturas.length > 0
+          ? faturas
+          : [{ valor: "0,00", vencimento: "-", status: "Nenhuma fatura" }],
       contratoPdf: contrato.contract_id
         ? IXCService.getContractPdfUrl(contrato.contract_id)
         : null,
     });
   } catch (error) {
-    console.error("[Dashboard] Erro ao montar dados:", error.message);
-    res.status(500).json({
-      error: "Erro interno ao carregar dashboard",
-      detalhes: error.message,
+    console.error("[Dashboard] Erro:", error.message);
+    res.status(500).json({ error: "Erro ao carregar dados" });
+  }
+};
+
+// NOVA ROTA: Trocar senha do hotsite
+exports.trocarSenha = async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    const { senhaAtual, novaSenha } = req.body;
+
+    if (!token || !senhaAtual || !novaSenha) {
+      return res.status(400).json({ error: "Dados incompletos" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "fibernet2025");
+    const clienteId = decoded.id;
+
+    // Busca cliente atual
+    const clienteRaw = await IXCService.list("cliente", {
+      qtype: "cliente.id",
+      query: clienteId,
+      oper: "=",
+      limit: 1,
     });
+
+    const cliente = clienteRaw.registros?.[0];
+    if (!cliente)
+      return res.status(404).json({ error: "Cliente não encontrado" });
+
+    // Verifica senha atual
+    const senhaCorreta =
+      cliente.senha_hotsite_md5 === "S"
+        ? cliente.senha === md5(senhaAtual)
+        : cliente.senha === senhaAtual;
+
+    if (!senhaCorreta) {
+      return res.status(401).json({ error: "Senha atual incorreta" });
+    }
+
+    // Atualiza senha (força MD5 para compatibilidade)
+    const resultado = await IXCService.post(
+      "cliente",
+      {
+        id: clienteId,
+        senha: md5(novaSenha),
+        senha_hotsite_md5: "S",
+      },
+      "editar"
+    );
+
+    if (resultado.error) {
+      return res.status(500).json({ error: "Erro ao salvar nova senha" });
+    }
+
+    res.json({ success: true, message: "Senha alterada com sucesso!" });
+  } catch (error) {
+    console.error("[Trocar Senha] Erro:", error.message);
+    res.status(500).json({ error: "Erro interno" });
   }
 };
